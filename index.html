@@ -243,6 +243,30 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
   .row2{flex-wrap:wrap}
   .kpis b{font-size:19px}
 }
+
+/* attendance */
+.dot.abs{background:var(--red)}
+.attk{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:4px 0 12px}
+.attk div{border-radius:14px;padding:8px 12px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.attk b{font-size:22px}
+.attk .ok{background:var(--greenbg);color:var(--greentx)} .attk .no{background:var(--redbg);color:var(--redtx)}
+.attlist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:52vh;overflow:auto;padding:2px}
+.att{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;text-align:left;min-height:56px}
+.att .nm{flex:1;min-width:0;display:flex;flex-direction:column}
+.att .nm b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att .nm small{font-size:12px;color:var(--muted)}
+.att .pill{background:var(--green);color:#fff;border-radius:12px;padding:6px 12px;font-size:13px;font-weight:800;flex:none}
+.att.abs{background:var(--redbg);border:2px solid #E8A39A}
+.att.abs .nm b{color:var(--redtx);text-decoration:line-through}
+.att.abs .pill{background:var(--red)}
+.wk.absw{background:#FDF3F2;border-style:dashed;border-color:#E8A39A}
+.wk.absw .nm{color:var(--redtx);text-decoration:line-through}
+.sumrow.absent{background:#FDECEA}.sumrow.absent em{background:#F8C9C3;color:var(--redtx)}
+.btn.upd{background:#E0A100;border-color:#E0A100;color:#3D2A00}
+.mi.upd{background:#E0A100;border-color:#E0A100;color:#3D2A00}
+.chg{border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.5;margin-bottom:8px}
+.chg.g{background:var(--greenbg);color:var(--greentx)}.chg.n{background:#F1F0F5;color:#4A4570}.chg.b{background:#E6F1FB;color:#0C447C}.chg.r{background:var(--redbg);color:var(--redtx)}
+@media (max-width:760px){.attlist{grid-template-columns:1fr}}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -661,7 +685,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -883,12 +907,12 @@ const isLost = r => r.stype === 'LOST';
 const isSafety = r => r.stype === 'SAFETY';
 const typeLabel = t => t === 'LOST' ? 'Lost time' : t === 'SAFETY' ? 'Safety' : '';
 
-/* Report 1 - daily by person */
-function buildDaily(lists, records, date) {
+/* Report 1 - daily by person (absences: who was marked absent that day; late arrivals are flagged) */
+function buildDaily(lists, records, date, absences) {
   const recs = records.filter(r => r.date === date && r.end);
   const byPerson = new Map();
   for (const r of recs) {
-    if (!byPerson.has(r.code)) byPerson.set(r.code, { code: r.code, name: r.name, trade: r.trade, lines: new Map(), total: 0 });
+    if (!byPerson.has(r.code)) byPerson.set(r.code, { code: r.code, name: r.name, trade: r.trade, lines: new Map(), total: 0, absent: false, late: '' });
     const p = byPerson.get(r.code);
     const key = `${r.wo}|${recKey(r)}`;
     if (!p.lines.has(key)) p.lines.set(key, { wo: r.wo, sj: r.sj, desc: r.sjDesc, stype: r.stype || 'WORK', hours: 0, first: r.start });
@@ -898,13 +922,22 @@ function buildDaily(lists, records, date) {
     if (r.start < ln.first) ln.first = r.start;
     p.total = round2(p.total + h);
   }
+  let nAbsent = 0;
+  (absences || []).filter(a => a.date === date && !a.cancelled).forEach(a => {
+    const p = byPerson.get(a.code);
+    if (a.late) { if (p) p.late = a.late; return; }
+    if (p) return;                                   // marked absent but has hours: he worked
+    byPerson.set(a.code, { code: a.code, name: a.name, trade: a.trade, total: 0, absent: true, late: '',
+      lines: new Map([['ABS', { wo: a.wo, sj: '', desc: 'ABSENT', stype: 'ABSENT', hours: 0, first: '' }]]) });
+    nAbsent++;
+  });
   const order = tradeOrder(lists, Array.from(byPerson.values()).map(p => p.trade));
   const persons = Array.from(byPerson.values()).sort((a, b) =>
     (order.indexOf(a.trade) - order.indexOf(b.trade)) || cmpStr(a.name, b.name));
   persons.forEach(p => { p.lines = Array.from(p.lines.values()).sort((a, b) => cmpStr(a.first, b.first)); });
   const sum = f => round2(recs.filter(f).reduce((s, r) => s + recHours(r), 0));
-  return { date, persons, total: sum(() => true), lost: sum(isLost), safety: sum(isSafety),
-    nWorkers: persons.length, nWO: new Set(recs.map(r => r.wo)).size, openCount: records.filter(r => r.date === date && !r.end).length };
+  return { date, persons, total: sum(() => true), lost: sum(isLost), safety: sum(isSafety), nAbsent,
+    nWorkers: persons.length - nAbsent, nWO: new Set(recs.map(r => r.wo)).size, openCount: records.filter(r => r.date === date && !r.end).length };
 }
 
 /* trade columns: up to 6 trades + Others */
@@ -1067,6 +1100,8 @@ function pdfTable(doc, startY, head, body, headerFn, colStyles) {
       if (s === 'sub') { data.cell.styles.fillColor = PDFC.light; data.cell.styles.fontStyle = 'bold'; }
       if (s === 'total') { data.cell.styles.fillColor = [214, 220, 228]; data.cell.styles.fontStyle = 'bold'; }
       if (s === 'lost') { data.cell.styles.textColor = [150, 40, 30]; }
+      if (s === 'lategroup') { data.cell.styles.fillColor = PDFC.gray; data.cell.styles.fontStyle = 'bold'; if (data.column.index === 5) data.cell.styles.textColor = [176, 96, 0]; }
+      if (s === 'absent') { data.cell.styles.textColor = [192, 57, 43]; data.cell.styles.fontStyle = 'bold'; }
     }
   });
   return doc.lastAutoTable.finalY;
@@ -1077,13 +1112,13 @@ const tradeNums = (tcols, o) => tcols.map(t => o.byTrade[t] ? fmtH(o.byTrade[t])
 function pdfDaily(ctx, data) {
   const doc = pdfDoc();
   const opt = { logo: ctx.logo, logoRatio: ctx.logoRatio, title: 'DAILY MAN-HOURS', form: QSL.forms.DAILY, prepared: ctx.prepared, date: data.date,
-    summary: `Workers: ${data.nWorkers}  |  WO worked: ${data.nWO}  |  Total man-hours: ${fmtH(data.total)}  |  Lost time: ${fmtH(data.lost)}  |  Safety: ${fmtH(data.safety)}  |  ${fmtDateLong(data.date)}` };
+    summary: `Workers: ${data.nWorkers}${data.nAbsent ? `  |  Absent: ${data.nAbsent}` : ''}  |  WO worked: ${data.nWO}  |  Total man-hours: ${fmtH(data.total)}  |  Lost time: ${fmtH(data.lost)}  |  Safety: ${fmtH(data.safety)}  |  ${fmtDateLong(data.date)}` };
   const header = () => pdfHeader(doc, opt);
   const startY = header() + 1;
   const body = [];
   data.persons.forEach((p, i) => {
-    body.push(rowOf([String(i + 1), p.name, p.trade, '', '', '', fmtH(p.total)], 'group'));
-    p.lines.forEach(l => body.push(rowOf(['', '', '', l.wo, l.sj, l.desc + (l.stype === 'LOST' ? '  (Lost time)' : ''), fmtH(l.hours)], l.stype === 'LOST' ? 'lost' : '')));
+    body.push(rowOf([String(i + 1), p.name, p.trade, '', '', p.late ? `LATE · arrived ${p.late}` : '', fmtH(p.total)], p.late ? 'lategroup' : 'group'));
+    p.lines.forEach(l => body.push(rowOf(['', '', '', l.wo, l.sj, l.desc + (l.stype === 'LOST' ? '  (Lost time)' : ''), fmtH(l.hours)], l.stype === 'LOST' ? 'lost' : l.stype === 'ABSENT' ? 'absent' : '')));
   });
   if (!data.persons.length) body.push(['', 'No closed records for this date.', '', '', '', '', '']);
   body.push(rowOf(['', 'TOTAL OF THE DAY', '', '', '', '', fmtH(data.total)], 'total'));
@@ -1170,11 +1205,11 @@ function xlsxHead(title, form, prepared, date, summary) {
 const tradeVals = (tcols, o) => tcols.map(t => o.byTrade[t] || 0).concat([o.total]);
 function xlsxDaily(prepared, data) {
   const rows = xlsxHead('DAILY MAN-HOURS', QSL.forms.DAILY, prepared, data.date,
-    `Workers: ${data.nWorkers} | WO worked: ${data.nWO} | Total man-hours: ${fmtH(data.total)} | Lost time: ${fmtH(data.lost)} | Safety: ${fmtH(data.safety)}`);
+    `Workers: ${data.nWorkers}${data.nAbsent ? ` | Absent: ${data.nAbsent}` : ''} | WO worked: ${data.nWO} | Total man-hours: ${fmtH(data.total)} | Lost time: ${fmtH(data.lost)} | Safety: ${fmtH(data.safety)}`);
   rows.push(['#', 'Worker', 'Trade', 'WO', 'SJ', 'Description', 'Type', 'Hours']);
   data.persons.forEach((p, i) => {
-    rows.push([i + 1, p.name, p.trade, '', '', 'TOTAL', '', p.total]);
-    p.lines.forEach(l => rows.push(['', '', '', l.wo, l.sj, l.desc, typeLabel(l.stype), l.hours]));
+    rows.push([i + 1, p.name, p.trade, '', '', p.late ? `TOTAL · LATE ${p.late}` : 'TOTAL', '', p.total]);
+    p.lines.forEach(l => rows.push(['', '', '', l.wo, l.sj, l.desc, l.stype === 'ABSENT' ? 'Absent' : typeLabel(l.stype), l.hours]));
   });
   rows.push(['', 'TOTAL OF THE DAY', '', '', '', '', '', data.total]);
   return [{ name: 'Daily ' + data.date, rows, cols: [5, 30, 22, 10, 8, 44, 10, 9].map(w => ({ wch: w })) }];
@@ -1229,11 +1264,28 @@ const UI = {
     bg.innerHTML = `<div class="modal ${opts.wide ? 'wide' : ''}" role="dialog" aria-modal="true">${html}</div>`;
     document.body.appendChild(bg);
     bg.addEventListener('click', e => { if (e.target === bg && !opts.locked) UI.close(); });
+    UI.keepScrollOnRedraw(bg.firstElementChild);
     const f = bg.querySelector('[autofocus]');
     if (f) setTimeout(() => f.focus(), 30);
     return bg.firstElementChild;
   },
   close() { const m = document.getElementById('modal'); if (m) m.remove(); },
+  /* a window that redraws itself on every tap keeps its scroll position */
+  keepScrollOnRedraw(el) {
+    const d = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    const LISTS = '.checklist,.sjpick,.pick,.prev,.sumlist,.opts';
+    Object.defineProperty(el, 'innerHTML', {
+      configurable: true,
+      get() { return d.get.call(this); },
+      set(v) {
+        const before = Array.from(this.querySelectorAll(LISTS)).map(x => x.scrollTop);
+        const top = this.scrollTop;
+        d.set.call(this, v);
+        Array.from(this.querySelectorAll(LISTS)).forEach((x, i) => { if (before[i]) x.scrollTop = before[i]; });
+        this.scrollTop = top;
+      }
+    });
+  },
   confirm(title, msg, okLabel = 'Confirm', danger = false) {
     return new Promise(res => {
       const m = UI.modal(`<h3>${esc(title)}</h3><p class="mtext">${esc(msg).replace(/\n/g, '<br>')}</p>
@@ -1326,7 +1378,7 @@ function defaultState() {
   return {
     lists: emptyLists(), records: [], sup: '', dev: 'Device-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
     code: '', timeManual: '',
-    myWOs: [], crews: {}, activeSJ: {}, customSJ: [],
+    myWOs: [], crews: {}, activeSJ: {}, customSJ: [], absences: [],
     days: {}, ended: {}, lunch: {}, stop: {},
     lastSend: 0, undo: []
   };
@@ -1337,6 +1389,7 @@ async function save() {
 }
 
 /* ---------------- helpers ---------------- */
+const iosBrowser = () => (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !navigator.standalone;
 const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
 const W = code => S.lists.workers.find(w => w.code === code);
 const nameOf = code => (W(code) || {}).name || code;
@@ -1357,10 +1410,10 @@ function openOf(code) {
   return null;
 }
 const opensOfWO = wo => S.records.filter(r => !r.end && r.wo === wo);
-function pending() { return S.records.filter(r => r.ts > S.lastSend).length + S.customSJ.filter(c => !c.sent).length; }
+function pending() { return S.records.filter(r => r.ts > S.lastSend).length + S.absences.filter(a => a.ts > S.lastSend).length + S.customSJ.filter(c => !c.sent).length; }
 
 function pushUndo(label) {
-  S.undo.push({ label, snap: JSON.stringify({ records: S.records, lunch: S.lunch, stop: S.stop, days: S.days, ended: S.ended, crews: S.crews }) });
+  S.undo.push({ label, snap: JSON.stringify({ records: S.records, lunch: S.lunch, stop: S.stop, days: S.days, ended: S.ended, crews: S.crews, absences: S.absences }) });
   if (S.undo.length > UNDO_MAX) S.undo.shift();
 }
 function closeRec(r, t) {
@@ -1382,6 +1435,7 @@ function statusOf(code, wo) {
     if (o.kind === 'STANDBY') return { cls: o.stype === 'SAFETY' ? 'safe' : 'stand', text: `${where}${shortDesc(o.sjDesc)} · ${hmOf(o.start)}` };
     return { cls: 'work', text: `${where}${o.sj} · ${o.sjDesc} · ${hmOf(o.start)}` };
   }
+  if (isAbsent(code)) return { cls: 'abs', text: 'Absent today · tap if he arrives' };
   if (lunchOn(wo) && S.lunch[wo].items.some(i => i.code === code)) return { cls: 'lunch', text: 'Lunch' };
   return { cls: 'free', text: dayOn(wo) ? 'Free (not counting)' : S.ended[wo] === today() ? 'Day ended' : 'Day not started' };
 }
@@ -1395,6 +1449,7 @@ async function checkTime(t, recs) {
 async function assign(target) {
   const wo = ui.tab;
   if (!dayOn(wo)) { UI.toast(`Tap Start day for WO ${wo} first.`, 'err'); return; }
+  ui.sel = ui.sel.filter(c => crewOf(wo).includes(c) && !isAbsent(c));
   if (!ui.sel.length) { UI.toast('First tap a worker.', 'err'); return; }
   if (lunchOn(wo)) { UI.toast('This WO is at lunch. Tap Back from lunch first.', 'err'); return; }
   const t = actTime();
@@ -1416,7 +1471,6 @@ async function assign(target) {
   if (!moved) S.undo.pop();
   const where = target.type === 'FREE' ? 'Free' : target.type === 'STANDBY' ? shortDesc(target.item.desc) : `${target.item.sj} · ${target.item.desc}`;
   ui.sel = [];
-  if (isPhone()) ui.pane = 'crew';
   await save(); render();
   UI.toast(moved ? `${moved} moved to ${where} at ${hmOf(t)}` : 'Already there.', moved ? 'ok' : '');
 }
@@ -1427,15 +1481,30 @@ async function startDayModal(wo) {
   if (S.ended[wo] === today()) {
     if (!await UI.confirm('Start again', `The day for WO ${wo} was already ended today.\nStart it again?`, 'Start again')) return;
   }
-  const crew = crewOf(wo);
+  const crew = crewOf(wo).filter(c => isAvailable(c));
   if (!crew.length) { UI.toast('First add your crew to this WO (+ Crew).', 'err'); crewModal(); return; }
   const old = S.records.filter(r => !r.end && r.date < today() && crew.includes(r.code));
   const holdItems = lostItems(S.lists, wo).concat(safetyItems(S.lists, wo));
-  const st = { mode: 'WORK', item: holdItems[0] ? holdItems[0].id : '', codes: new Set(crew), time: nowHM(), close: '17:00' };
+  const absentNow = new Set(absencesOf(wo).map(a => a.code));
+  const st = { step: 'ATT', absent: absentNow, mode: 'WORK', item: holdItems[0] ? holdItems[0].id : '', codes: null, time: nowHM(), close: '17:00' };
+  const present = () => crew.filter(c => !st.absent.has(c));
   const m = UI.modal('', { wide: true, locked: true });
   const draw = () => {
+    if (st.step === 'ATT') {
+      const p = present().length;
+      m.innerHTML = `
+        <h3>${icon('users')} Attendance · WO ${esc(wo)} · ${fmtDate(today())}</h3>
+        <p class="msub">Step 1 of 2 · Everyone is Present. Tap who is absent today.</p>
+        <div class="attk"><div class="ok">Present<b>${p}</b></div><div class="no">Absent<b>${st.absent.size}</b></div></div>
+        <div class="attlist">${crew.map(c => { const w = W(c) || {}; const a = st.absent.has(c);
+          return `<button class="att ${a ? 'abs' : ''}" data-att="${esc(c)}"><span class="nm"><b>${esc(w.name || c)}</b><small>${esc(w.trade || '')}</small></span><span class="pill">${a ? 'Absent' : 'Present'}</span></button>`; }).join('')}</div>
+        <div class="mbtns"><button class="btn ghost" data-x="cancel">Cancel</button><button class="btn green" data-x="next" ${p ? '' : 'disabled'}>Confirm ${p} present · Next</button></div>`;
+      return;
+    }
+    if (!st.codes) st.codes = new Set(present());
     m.innerHTML = `
       <h3>${icon('play')} Start day · WO ${esc(wo)} · ${fmtDate(today())}</h3>
+      <p class="msub">Step 2 of 2 · ${present().length} present${st.absent.size ? ` · ${st.absent.size} absent` : ''}</p>
       ${old.length ? `<div class="note"><b>${old.length} record(s) still open from a previous day.</b> They will be closed at:
         <input class="inp" type="time" id="sdClose" value="${st.close}" style="max-width:150px;margin-top:8px"></div>` : ''}
       <div class="mlabel">HOW DOES THE CREW START?</div>
@@ -1444,20 +1513,23 @@ async function startDayModal(wo) {
       ${st.mode === 'HOLD' ? `
         <div class="mlabel">REASON · WO ${esc(wo)}</div>
         ${itemOptions(holdItems, st.item)}
-        <div class="mlabel">WHO IS HERE? <span class="lite">(${st.codes.size} selected)</span></div>
-        <div class="checklist">${crew.map(c => `<button class="ck ${st.codes.has(c) ? 'sel' : ''}" data-c="${esc(c)}"><span class="box">${icon('check')}</span>${esc(nameOf(c))}</button>`).join('')}</div>
+        <div class="mlabel">WHO IS ON HOLD? <span class="lite">(${st.codes.size} selected)</span></div>
+        <div class="checklist">${present().map(c => `<button class="ck ${st.codes.has(c) ? 'sel' : ''}" data-c="${esc(c)}"><span class="box">${icon('check')}</span>${esc(nameOf(c))}</button>`).join('')}</div>
         <div class="field" style="margin-top:12px;max-width:200px"><label>Start time</label><input class="inp" type="time" id="sdTime" value="${st.time}"></div>`
       : `<p class="msub" style="margin-top:12px">Then tap each worker and the sub job where they go.</p>`}
-      <div class="mbtns"><button class="btn ghost" data-x="cancel">Cancel</button><button class="btn primary" data-x="ok">${icon('play')} Start day</button></div>`;
+      <div class="mbtns"><button class="btn ghost" data-x="back">Back</button><button class="btn primary" data-x="ok">${icon('play')} Start day</button></div>`;
   };
   draw();
   m.addEventListener('input', e => { if (e.target.id === 'sdClose') st.close = e.target.value; if (e.target.id === 'sdTime') st.time = e.target.value; });
   m.addEventListener('click', async e => {
-    const b = e.target.closest('button'); if (!b) return;
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    if (b.dataset.att) { st.absent.has(b.dataset.att) ? st.absent.delete(b.dataset.att) : st.absent.add(b.dataset.att); draw(); return; }
     if (b.dataset.m) { st.mode = b.dataset.m; draw(); return; }
     if (b.dataset.i) { st.item = b.dataset.i; draw(); return; }
     if (b.dataset.c) { st.codes.has(b.dataset.c) ? st.codes.delete(b.dataset.c) : st.codes.add(b.dataset.c); draw(); return; }
     if (b.dataset.x === 'cancel') { UI.close(); return; }
+    if (b.dataset.x === 'next') { st.step = 'MODE'; st.codes = null; m.scrollTop = 0; draw(); return; }
+    if (b.dataset.x === 'back') { st.step = 'ATT'; draw(); return; }
     if (b.dataset.x !== 'ok') return;
     if (old.length) {
       for (const o of old) if (`${o.date}T${st.close}` <= o.start) { await UI.alert('Check the time', `${st.close} is before ${o.name} started on ${fmtDate(o.date)} (${hmOf(o.start)}).`); return; }
@@ -1465,6 +1537,7 @@ async function startDayModal(wo) {
     if (st.mode === 'HOLD' && (!st.item || !st.codes.size || !st.time)) { UI.toast('Choose reason, people and time.', 'err'); return; }
     pushUndo('start day');
     old.forEach(o => { o.end = `${o.date}T${st.close}`; o.ts = Date.now(); });
+    setAbsences(wo, st.absent);
     S.days[wo] = today(); delete S.ended[wo];
     S.lunch[wo] = { on: false, time: '', items: [] };
     S.stop[wo] = { on: false };
@@ -1474,8 +1547,33 @@ async function startDayModal(wo) {
       for (const code of st.codes) { const o = openOf(code); if (o) closeRec(o, t); newRec(code, wo, item, 'STANDBY', t); }
     }
     UI.close(); await save(); render();
-    UI.toast(st.mode === 'HOLD' ? `WO ${wo} started on hold · ${st.codes.size} worker(s)` : `WO ${wo} started. Tap a worker, then the sub job.`, 'ok');
+    UI.toast(`WO ${wo} started · ${present().length} present${st.absent.size ? ` · ${st.absent.size} absent` : ''}`, 'ok');
   });
+}
+/* ---------------- attendance ---------------- */
+// absences: { id, date, code, name, trade, wo, sup, dev, late:'' | 'HH:MM', cancelled, ts }
+function absencesOf(wo, date) { const d = date || today(); return S.absences.filter(a => a.wo === wo && a.date === d && !a.cancelled && !a.late); }
+function isAbsent(code) { return S.absences.some(a => a.code === code && a.date === today() && !a.cancelled && !a.late); }
+function isAvailable(code) { const w = W(code); return !!w && w.enabled !== false; }
+function setAbsences(wo, set) {
+  const d = today();
+  S.absences.filter(a => a.wo === wo && a.date === d && !a.cancelled && !a.late && !set.has(a.code)).forEach(a => { a.cancelled = true; a.ts = Date.now(); });
+  set.forEach(code => {
+    const cur = S.absences.find(a => a.wo === wo && a.date === d && a.code === code);
+    if (cur) { cur.cancelled = false; cur.late = ''; cur.ts = Date.now(); return; }
+    const w = W(code) || { name: code, trade: '' };
+    S.absences.push({ id: uid(), date: d, code, name: w.name, trade: w.trade || '', wo, sup: S.sup, dev: S.dev, late: '', cancelled: false, ts: Date.now() });
+  });
+}
+async function arrivedLate(code) {
+  const t = S.timeManual || nowHM();
+  if (!await UI.confirm('Arrived late', `${nameOf(code)} is marked Absent.\nMark as present, arrived at ${t}?\nThe report will show LATE ${t}.`, 'Present · LATE ' + t)) return;
+  pushUndo('late arrival');
+  S.absences.filter(a => a.code === code && a.date === today() && !a.cancelled && !a.late).forEach(a => { a.late = t; a.ts = Date.now(); });
+  ui.sel = [code];
+  if (isPhone()) ui.pane = 'jobs';
+  await save(); render();
+  UI.toast(`${nameOf(code)} present from ${t}. Tap where he goes.`, 'ok');
 }
 function itemOptions(items, selId) {
   let last = '', out = '';
@@ -1636,15 +1734,16 @@ function summaryModal(date, wos) {
     if (!people.has(r.code)) people.set(r.code, { code: r.code, name: r.name, trade: r.trade, h: 0, wos: new Set(), open: false });
     const p = people.get(r.code); p.h = round2(p.h + recHours(r)); p.wos.add(r.wo); if (!r.end) p.open = true;
   });
-  (wos || S.myWOs).forEach(wo => crewOf(wo).forEach(c => { if (!people.has(c)) { const w = W(c) || {}; people.set(c, { code: c, name: w.name || c, trade: w.trade || '', h: 0, wos: new Set([wo]), open: false }); } }));
+  (wos || S.myWOs).forEach(wo => crewOf(wo).filter(isAvailable).forEach(c => { if (!people.has(c)) { const w = W(c) || {}; people.set(c, { code: c, name: w.name || c, trade: w.trade || '', h: 0, wos: new Set([wo]), open: false }); } }));
+  S.absences.filter(a => a.date === date && a.sup === S.sup && !a.cancelled).forEach(a => { const p = people.get(a.code); if (p) { if (a.late) p.late = a.late; else if (!p.h) p.absent = true; } });
   const list = Array.from(people.values()).sort((a, b) => cmpStr(a.name, b.name));
   const tot = round2(list.reduce((s, p) => s + p.h, 0));
   const lost = round2(recs.filter(r => r.stype === 'LOST').reduce((s, r) => s + recHours(r), 0));
   const nPend = pending();
   const m = UI.modal(`<h3>${icon('flag')} Day summary · ${fmtDate(date)}</h3>
     <div class="kpis"><div><small>Man-hours</small><b>${fmtH(tot)}</b></div><div><small>Workers</small><b>${list.filter(p => p.h > 0).length}</b></div><div><small>Lost time</small><b class="redt">${fmtH(lost)}</b></div></div>
-    <div class="sumlist">${list.map(p => `<div class="sumrow ${p.h > 8 ? 'ot' : p.h === 0 ? 'zero' : ''}"><span><b>${esc(p.name)}</b><small>${esc(p.trade)} · WO ${esc(Array.from(p.wos).join(', '))}</small></span>
-      <span class="h">${fmtH(p.h)}${p.h > 8 ? '<em>Overtime</em>' : p.h === 0 ? '<em>0 h</em>' : ''}${p.open ? '<em>open</em>' : ''}</span></div>`).join('') || '<div class="empty">No records.</div>'}</div>
+    <div class="sumlist">${list.map(p => `<div class="sumrow ${p.absent ? 'absent' : p.h > 8 ? 'ot' : p.h === 0 ? 'zero' : ''}"><span><b>${esc(p.name)}</b><small>${esc(p.trade)} · WO ${esc(Array.from(p.wos).join(', '))}</small></span>
+      <span class="h">${fmtH(p.h)}${p.absent ? '<em>Absent</em>' : p.h > 8 ? '<em>Overtime</em>' : p.h === 0 ? '<em>0 h</em>' : ''}${p.late ? `<em>Late ${p.late}</em>` : ''}${p.open ? '<em>open</em>' : ''}</span></div>`).join('') || '<div class="empty">No records.</div>'}</div>
     <div class="mbtns"><button class="btn ghost" data-x="close">Close</button>
       <button class="btn" data-x="report">${icon('report')} Daily report</button>
       <button class="btn primary" data-x="send">${icon('send')} Send to Admin${nPend ? ` <span class="badge">${nPend}</span>` : ''}</button></div>`, { wide: true });
@@ -1882,13 +1981,13 @@ async function sendToAdmin() {
   const n = pending();
   if (!n) { UI.toast('Nothing new to send. Admin already has everything.', 'ok'); return; }
   const changed = S.records.filter(r => r.ts > S.lastSend);
-  const dates = Array.from(new Set(changed.map(r => r.date))).sort();
+  const dates = Array.from(new Set(changed.map(r => r.date).concat(S.absences.filter(a => a.ts > S.lastSend).map(a => a.date)))).sort();
   if (!dates.length) dates.push(today());
   const recs = S.records.filter(r => dates.includes(r.date));
   const open = recs.filter(r => !r.end).length;
   if (open && !await UI.confirm('Send to Admin', `${open} worker(s) are still on the clock. Their hours go when you send again after End day.\nSend now?`, 'Send now')) return;
   const payload = { type: 'QSL_HH_DAY', version: APP_VERSION, sup: S.sup, dev: S.dev, dates, date: dates[dates.length - 1],
-    sentAt: new Date().toISOString(), records: recs, customSJ: S.customSJ };
+    sentAt: new Date().toISOString(), records: recs, absences: S.absences.filter(a => dates.includes(a.date)), customSJ: S.customSJ };
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   const fname = `HH_${today()}_${slug(S.sup || 'SUP')}_${nowHM().replace(':', '')}.qslhh`;
   const stamp = Date.now();
@@ -1904,7 +2003,7 @@ function reportRecords(date) {
   return S.records.filter(r => r.date === date && r.sup === S.sup).map(r => r.end ? r : (r.date === today() && now > r.start ? Object.assign({}, r, { end: now }) : r));
 }
 function dailyBlob(date) {
-  const data = buildDaily(S.lists, reportRecords(date), date);
+  const data = buildDaily(S.lists, reportRecords(date), date, S.absences.filter(a => a.sup === S.sup));
   if (!data.persons.length) return null;
   return pdfDaily({ logo: LOGO_QSL, logoRatio: LOGO_RATIO, ep: LOGO_EP, prepared: S.sup }, data).output('blob');
 }
@@ -1920,7 +2019,7 @@ async function shareDaily(date, mode) {
   } catch (err) { UI.alert('Daily report', 'Could not create the PDF.\n' + (err.message || err)); }
 }
 function reportModal(pre) {
-  const dates = Array.from(new Set(S.records.filter(r => r.sup === S.sup).map(r => r.date))).sort().reverse();
+  const dates = Array.from(new Set(S.records.filter(r => r.sup === S.sup).map(r => r.date).concat(S.absences.filter(a => a.sup === S.sup && !a.cancelled).map(a => a.date)))).sort().reverse();
   if (!dates.length) { UI.alert('Daily report', 'There are no records yet. Start the day and assign your crew first.'); return; }
   const st = { date: dates.includes(pre) ? pre : dates[0] };
   const share = canShareFiles();
@@ -1988,17 +2087,54 @@ async function importLists() {
     if (data.type !== 'QSL_HH_LISTS' || !data.lists) throw new Error('This is not a lists file from Admin.');
     const l = data.lists;
     if (!Array.isArray(l.workers) || !Array.isArray(l.wos) || !Array.isArray(l.sjs)) throw new Error('The file is damaged.');
+    const first = !S.lists.workers.length;
+    const ch = listChanges(S.lists, Object.assign(emptyLists(), l));
     S.lists = Object.assign(emptyLists(), l);
+    S.listsDate = data.created || new Date().toISOString();
     const known = new Set(S.lists.sjs.map(sjKey));
     S.customSJ = S.customSJ.filter(c => !known.has(c.id));          // admin already has them
+    // people no longer available leave the crews (unless they are on the clock right now)
+    ch.gone.forEach(w => S.myWOs.forEach(wo => { if (!openOf(w.code)) S.crews[wo] = crewOf(wo).filter(c => c !== w.code); }));
     S.myWOs = S.myWOs.filter(wo => { const w = findWO(S.lists, wo); return (w && w.status === 'OPEN') || opensOfWO(wo).length; });
     if (!S.myWOs.includes(ui.tab)) ui.tab = S.myWOs[0] || '';
     await save(); render();
-    UI.toast(`Lists updated: ${l.workers.filter(w => w.enabled !== false).length} workers · ${openWOs(S.lists).length} open WO`, 'ok');
-    if (!locked() && !S.sup) openSettings(true);
+    if (first) {
+      UI.toast(`Lists loaded: ${l.workers.filter(w => w.enabled !== false).length} workers · ${openWOs(S.lists).length} open WO`, 'ok');
+      if (!locked() && !S.sup) openSettings(true);
+    } else if (!locked()) changesModal(ch);
   } catch (e) {
     UI.alert('Import lists', 'Could not import the file.\n' + (e.message || e));
   }
+}
+function listChanges(a, b) {
+  const openW = l => new Map(l.wos.filter(w => w.status === 'OPEN').map(w => [w.wo, w]));
+  const oa = openW(a), ob = openW(b);
+  const openS = l => new Map(l.sjs.filter(s => s.status === 'OPEN').map(s => [s.wo + '|' + sjKey(s), s]));
+  const sa = openS(a), sb = openS(b);
+  const en = l => new Map(l.workers.filter(w => w.enabled !== false).map(w => [w.code, w]));
+  const ea = en(a), eb = en(b);
+  const count = (from, notIn) => { const m = {}; from.forEach((s, k) => { if (!notIn.has(k)) m[s.wo] = (m[s.wo] || 0) + 1; }); return m; };
+  return {
+    newWO: Array.from(ob.values()).filter(w => !oa.has(w.wo)),
+    closedWO: Array.from(oa.values()).filter(w => !ob.has(w.wo)),
+    newSJ: count(sb, sa), closedSJ: Object.fromEntries(Object.entries(count(sa, sb)).filter(([wo]) => ob.has(wo))),
+    newW: Array.from(eb.values()).filter(w => !ea.has(w.code)),
+    gone: Array.from(ea.values()).filter(w => !eb.has(w.code))
+  };
+}
+function changesModal(ch) {
+  const per = m => Object.entries(m).map(([wo, n]) => `${n} in WO ${esc(wo)}`).join(' · ');
+  const names = ws => ws.slice(0, 8).map(w => `${esc(w.name)}${w.trade ? ` (${esc(w.trade)})` : ''}`).join(', ') + (ws.length > 8 ? ` +${ws.length - 8} more` : '');
+  const box = [];
+  if (ch.newWO.length || Object.keys(ch.newSJ).length) box.push(`<div class="chg g">${ch.newWO.length ? `<b>New WO:</b> ${ch.newWO.map(w => `${esc(w.wo)} · ${esc(w.desc)}`).join(', ')}<br>` : ''}${Object.keys(ch.newSJ).length ? `<b>New sub jobs:</b> ${per(ch.newSJ)}` : ''}</div>`);
+  if (ch.closedWO.length || Object.keys(ch.closedSJ).length) box.push(`<div class="chg n">${ch.closedWO.length ? `<b>Closed WO:</b> ${ch.closedWO.map(w => esc(w.wo)).join(', ')}<br>` : ''}${Object.keys(ch.closedSJ).length ? `<b>Closed sub jobs:</b> ${per(ch.closedSJ)}` : ''}</div>`);
+  if (ch.newW.length) box.push(`<div class="chg b"><b>New workers:</b> ${names(ch.newW)}<br><small>Add them with + Crew if they work with you.</small></div>`);
+  if (ch.gone.length) box.push(`<div class="chg r"><b>Not available</b> (vacation or left): ${names(ch.gone)}<br><small>Taken out of your crew until the office turns them on again.</small></div>`);
+  const m = UI.modal(`<h3>${icon('download')} Lists updated · ${fmtDate(today())}</h3>
+    <p class="msub">${box.length ? 'What changed since your last lists:' : 'No changes since your last lists.'}</p>
+    ${box.join('')}
+    <div class="mbtns"><button class="btn primary" data-x="ok">OK</button></div>`, { locked: true });
+  m.querySelector('[data-x]').onclick = () => UI.close();
 }
 const locked = () => !!(S.lists.accessCode && S.code !== S.lists.accessCode);
 function lockScreen(root) {
@@ -2025,6 +2161,8 @@ function lockScreen(root) {
 
 /* ---------------- selection ---------------- */
 function tapWorker(code) {
+  if (isAbsent(code) && !ui.multi) { if (dayOn(ui.tab)) arrivedLate(code); else UI.toast('Start the day first.', 'err'); return; }
+  if (isAbsent(code)) return;
   if (ui.multi) {
     const i = ui.sel.indexOf(code);
     if (i >= 0) ui.sel.splice(i, 1); else ui.sel.push(code);
@@ -2036,7 +2174,17 @@ function tapWorker(code) {
 }
 
 /* ---------------- render ---------------- */
+let lastView = '';
 function render() {
+  // keep the lists where the supervisor left them (unless he changed tab or pane)
+  const view = ui.tab + '|' + ui.pane;
+  const keep = view === lastView ? ['.pane-crew .scroll', '.pane-jobs .scroll', '.morelist', '.tabs', '.actions']
+    .map(q => { const e = document.querySelector(q); return e ? [q, e.scrollTop, e.scrollLeft] : null; }).filter(Boolean) : [];
+  renderView();
+  lastView = view;
+  keep.forEach(([q, t, l]) => { const e = document.querySelector(q); if (e) { e.scrollTop = t; e.scrollLeft = l; } });
+}
+function renderView() {
   const root = document.getElementById('root');
   if (locked()) { lockScreen(root); return; }
   if (!S.myWOs.includes(ui.tab)) ui.tab = S.myWOs[0] || '';
@@ -2059,6 +2207,7 @@ function render() {
         <h2>Welcome</h2>
         <p>To start, import the <b>lists file</b> from the office (workers, WO and sub jobs).</p>
         <button class="btn primary" data-a="import">${icon('download')} Import lists</button>
+        ${iosBrowser() ? `<div class="note" style="margin-top:16px;text-align:left">iPhone: first tap <b>Share › Add to Home Screen</b> and always open the app from that icon. Safari and the icon keep separate data.</div>` : ''}
       </div></div>
       <div class="foot"><span class="status"></span><span class="foot-ep">Powered by <img src="${LOGO_EP}" alt="EP"></span></div></div>`;
     return;
@@ -2081,7 +2230,7 @@ function render() {
   const wo = ui.tab;
   const woRec = findWO(S.lists, wo) || { desc: '' };
   const on = dayOn(wo);
-  const crew = crewOf(wo).filter(c => W(c));
+  const crew = crewOf(wo).filter(c => isAvailable(c));
   const trades = tradeOrder(S.lists, crew.map(c => W(c).trade));
   if (ui.filter && !trades.includes(ui.filter)) ui.filter = '';
   const shown = crew.map(W).filter(w => !ui.filter || w.trade === ui.filter)
@@ -2103,7 +2252,7 @@ function render() {
       ${trades.length > 1 ? `<div class="filters"><button class="chip ${!ui.filter ? 'sel' : ''}" data-f="">All</button>${trades.map(t => `<button class="chip ${ui.filter === t ? 'sel' : ''}" data-f="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
       <div class="scroll">
         ${shown.map(w => { const st = statusOf(w.code, wo);
-          return `<button class="wk ${selSet.has(w.code) ? 'sel' : ''}" data-w="${esc(w.code)}">
+          return `<button class="wk ${selSet.has(w.code) ? 'sel' : ''} ${isAbsent(w.code) ? 'absw' : ''}" data-w="${esc(w.code)}">
             ${ui.multi ? `<span class="cb">${icon('check')}</span>` : `<span class="dot ${st.cls}"></span>`}
             <span style="min-width:0"><div class="nm">${esc(w.name)}</div><div class="st">${esc(st.text)}</div></span>
             <span class="tr">${esc(w.trade)}</span></button>`; }).join('')
@@ -2114,7 +2263,7 @@ function render() {
   const opens = new Map();
   crew.forEach(c => { const o = openOf(c); if (o && o.wo === wo) opens.set(c, o); });
   const chip = (code, o, cls) => `<span class="pp ${cls} ${selSet.has(code) ? 'selp' : ''}" data-p="${esc(code)}"><span>${esc(nameOf(code))}</span>${o ? `<b>${hmOf(o.start)}</b>` : ''}</span>`;
-  const freeList = crew.filter(c => !openOf(c));
+  const freeList = crew.filter(c => !openOf(c) && !isAbsent(c));
   const standers = crew.filter(c => opens.has(c) && opens.get(c).kind === 'STANDBY');
   const act = (S.activeSJ[wo] || []).map(id => getSJ(wo, id)).filter(s => s && s.status === 'OPEN');
   // a worker on a SJ that is not on the board still shows
@@ -2156,6 +2305,7 @@ function render() {
   status = `${nOn} on the clock in ${S.myWOs.filter(dayOn).length} WO`;
 
   const more = `<div class="col pane-more"><div class="morelist">
+      <button class="mi upd" data-a="import">${icon('download')}<span>Update lists from office${S.listsDate ? `<small style="display:block;font-weight:600;font-size:12px">Last update: ${fmtDate(S.listsDate.slice(0, 10))}</small>` : ''}</span></button>
       <button class="mi" data-a="send">${icon('send')}<span>Send to Admin</span>${nPend ? `<span class="badge">${nPend}</span>` : ''}</button>
       <button class="mi" data-a="report">${icon('report')}<span>Daily report</span></button>
       <button class="mi" data-a="summary">${icon('flag')}<span>Day summary</span></button>
@@ -2175,6 +2325,7 @@ function render() {
 function footer(nPend, status) {
   return `<div class="foot">
       <button class="btn sm primary" data-a="send">${icon('send')} Send to Admin${nPend ? ` <span class="badge">${nPend}</span>` : ''}</button>
+      <button class="btn sm upd" data-a="import">${icon('download')} Update lists</button>
       <button class="btn sm" data-a="report">${icon('share')} Daily report</button>
       <button class="btn sm ghost" data-a="settings" aria-label="Settings">${icon('gear')}</button>
       <span class="status">${esc(status)}</span>
@@ -2184,6 +2335,7 @@ function footer(nPend, status) {
 
 /* ---------------- events ---------------- */
 function onClick(e) {
+  if (!e.target.isConnected) return;            // the tap was on a window that just closed
   if (document.getElementById('modal')) return;
   if (locked()) return;
   const p = e.target.closest('[data-p]');
