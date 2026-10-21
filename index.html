@@ -699,7 +699,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.2.1';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -1647,6 +1647,7 @@ function statusOf(code, wo) {
   const o = openOf(code);
   if (o) {
     const where = o.wo !== wo ? `WO ${o.wo} · ` : '';
+    if (o.kind === 'FREE') return { cls: 'free', text: `${where}Free · not assigned since ${hmOf(o.start)}` };
     if (o.kind === 'STANDBY') return { cls: o.stype === 'SAFETY' ? 'safe' : 'stand', text: `${where}${shortDesc(o.sjDesc)} · ${hmOf(o.start)}` };
     return { cls: 'work', text: `${where}${o.sj} · ${o.sjDesc} · ${hmOf(o.start)}` };
   }
@@ -1662,6 +1663,9 @@ async function checkTime(t, recs) {
   return true;
 }
 
+/* time without a task: kept as NOT ASSIGNED (time lost) so the report shows it */
+const FREE_ITEM = { id: 'NA', sj: 'NA', desc: 'NOT ASSIGNED', section: 'TIME LOST', type: 'LOST' };
+function startFree(code, wo, t) { if (!openOf(code) && !outToday(code)) newRec(code, wo, FREE_ITEM, 'FREE', t); }
 /* ---------------- assign ---------------- */
 /* the first task of the day starts at the day start time (07:00) or at the time he arrived late */
 function firstStart(code, wo, t) {
@@ -1690,8 +1694,13 @@ async function assign(target) {
   let moved = 0;
   for (const code of ui.sel) {
     const o = openOf(code);
-    if (o && target.type !== 'FREE' && o.wo === wo && o.sjId === target.item.id) continue;
-    if (!o && target.type === 'FREE') continue;
+    if (o && target.type !== 'FREE' && o.wo === wo && o.sjId === target.item.id && o.kind !== 'FREE') continue;
+    if (target.type === 'FREE' && (!o || o.kind === 'FREE')) continue;
+    // first task right after the start (up to 10 min): the free time at the start does not count as not assigned
+    if (o && o.kind === 'FREE' && target.type !== 'FREE' && S.dayStart[wo] && o.start === `${today()}T${S.dayStart[wo]}` && toMin(hmOf(t)) - toMin(S.dayStart[wo]) <= 10) {
+      Object.assign(o, { sjId: target.item.id, sj: target.item.sj, sjDesc: target.item.desc, section: target.item.section || '', stype: target.item.type || 'WORK', kind: target.type === 'STANDBY' ? 'STANDBY' : 'WORK', ts: Date.now() });
+      moved++; continue;
+    }
     if (o && t <= o.start && target.type !== 'FREE') {      // day not started yet (before 07:00): just change his task
       Object.assign(o, { wo, sjId: target.item.id, sj: target.item.sj, sjDesc: target.item.desc, section: target.item.section || '', stype: target.item.type || 'WORK', kind: target.type === 'STANDBY' ? 'STANDBY' : 'WORK', ts: Date.now() });
       moved++; continue;
@@ -1699,6 +1708,7 @@ async function assign(target) {
     if (o) closeRec(o, t);
     delete S.plunch[code];
     if (target.type !== 'FREE') newRec(code, wo, target.item, target.type === 'STANDBY' ? 'STANDBY' : 'WORK', firstStart(code, wo, t));
+    else newRec(code, wo, FREE_ITEM, 'FREE', t);
     moved++;
   }
   if (!moved) S.undo.pop();
@@ -1782,6 +1792,7 @@ async function startDayModal(wo) {
       const item = holdItems.find(i => i.id === st.item);
       for (const code of st.codes) { const o = openOf(code); if (o) closeRec(o, t); newRec(code, wo, item, 'STANDBY', t); }
     }
+    present().forEach(code => startFree(code, wo, `${today()}T${st.time}`));
     UI.close(); await save(); render();
     UI.toast(`WO ${wo} started · ${present().length} present${st.absent.size ? ` · ${st.absent.size} absent` : ''}`, 'ok');
   });
@@ -1807,6 +1818,7 @@ async function arrivedLate(code) {
   if (!await UI.confirm('Arrived late', `${nameOf(code)} is marked Absent.\nMark as present, arrived at ${t}?\nThe report will show LATE ${t}.`, 'Present · LATE ' + t)) return;
   pushUndo('late arrival');
   S.absences.filter(a => isAbs(a) && a.code === code && a.date === today() && !a.cancelled && !a.late).forEach(a => { a.late = t; a.ts = Date.now(); });
+  if (dayOn(ui.tab)) startFree(code, ui.tab, `${today()}T${t}`);
   ui.sel = [code];
   if (isPhone()) ui.pane = 'jobs';
   await save(); render();
@@ -2272,6 +2284,7 @@ async function moveToWO() {
       opens.forEach(o => closeRec(o, t));
       S.crews[ui.tab] = crewOf(ui.tab).filter(c => !ui.sel.includes(c));
       S.crews[b.dataset.w] = Array.from(new Set(crewOf(b.dataset.w).concat(ui.sel)));
+      if (dayOn(b.dataset.w)) ui.sel.forEach(c => startFree(c, b.dataset.w, t));
       const n = ui.sel.length; ui.sel = [];
       UI.close(); await save(); render();
       UI.toast(`${n} sent to WO ${b.dataset.w} at ${hmOf(t)}. They are Free there until you assign them.`, 'ok');
@@ -2334,7 +2347,7 @@ function sjActions(sj) {
     if (!await checkTime(t, opens)) return;
     if (!await UI.confirm('Mark completed', `${sj.sj} · ${sj.desc}\nCompleted at ${hmOf(t)}?`, 'Mark completed')) return;
     pushUndo('completed');
-    opens.forEach(o => closeRec(o, t));
+    opens.forEach(o => { closeRec(o, t); startFree(o.code, wo, t); });
     S.completed.push({ id: uid(), wo, sjId: id, sj: sj.sj, desc: sj.desc, date: today(), time: hmOf(t), sup: S.sup, dev: S.dev, ts: Date.now() });
     S.activeSJ[wo] = (S.activeSJ[wo] || []).filter(x => x !== id);
     await save(); render();
@@ -2677,7 +2690,7 @@ function renderView() {
   const opens = new Map();
   crew.forEach(c => { const o = openOf(c); if (o && o.wo === wo) opens.set(c, o); });
   const chip = (code, o, cls) => `<span class="pp ${cls} ${selSet.has(code) ? 'selp' : ''}" data-p="${esc(code)}"><span>${esc(nameOf(code))}</span>${o ? `<b>${hmOf(o.start)}</b>` : ''}</span>`;
-  const freeList = crew.filter(c => !openOf(c) && !outToday(c));
+  const freeList = crew.filter(c => { const o = openOf(c); return (!o || (o.kind === 'FREE' && o.wo === wo)) && !outToday(c); });
   const standers = crew.filter(c => opens.has(c) && opens.get(c).kind === 'STANDBY');
   const act = (S.activeSJ[wo] || []).map(id => getSJ(wo, id)).filter(s => s && s.status === 'OPEN' && !isDone(wo, sjKey(s)));
   // a worker on a SJ that is not on the board still shows
@@ -2705,8 +2718,8 @@ function renderView() {
         ${stopOn(wo) ? `<div class="banner stop">${icon('stop')} WORK STOPPED · ${esc(shortDesc(S.stop[wo].item.desc))} since ${hmOf(S.stop[wo].time)}</div>` : ''}
         ${lunchOn(wo) ? `<div class="banner lunch">${icon('coffee')} LUNCH since ${hmOf(S.lunch[wo].time)}</div>` : ''}
         <div class="sjg">
-          <button class="sj free" data-t="FREE"><div class="h"><span>FREE</span><span class="count">${freeList.length || ''}</span></div><div class="d">Not counting</div>
-            <div class="people">${freeList.map(c => chip(c, null, onPLunch(c) || (lunchOn(wo) && S.lunch[wo].items.some(i => i.code === c)) ? 'lunch' : 'free')).join('')}</div></button>
+          <button class="sj free" data-t="FREE"><div class="h"><span>FREE</span><span class="count">${freeList.length || ''}</span></div><div class="d">Not assigned · counts as time lost</div>
+            <div class="people">${freeList.map(c => chip(c, opens.get(c) || null, onPLunch(c) || (lunchOn(wo) && S.lunch[wo].items.some(i => i.code === c)) ? 'lunch' : 'free')).join('')}</div></button>
           <button class="sj stand ${ui.sel.length ? 'target' : ''}" data-t="STANDBY"><div class="h"><span>STAND BY</span><span class="count">${standers.length || ''}</span></div><div class="d">Time lost · safety</div>
             <div class="people">${standers.map(c => chip(c, opens.get(c), opens.get(c).stype === 'SAFETY' ? 'safe' : 'stand')).join('')}</div></button>
         </div>
