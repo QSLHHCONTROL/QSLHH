@@ -1672,7 +1672,7 @@ function firstStart(code, wo, t) {
   if (!st) return t;
   const t0 = `${today()}T${st}`;
   if (toMin(hmOf(t)) - toMin(st) > 60) return t;          // assigned much later: count from now
-  return t0 < t ? t0 : t;
+  return t0;                                               // before or just after the start: from the start time
 }
 async function assign(target) {
   const wo = ui.tab;
@@ -1684,7 +1684,7 @@ async function assign(target) {
   for (const code of ui.sel) {
     const o = openOf(code);
     if (o && o.date !== today()) { await UI.alert('Open record', `${nameOf(code)} has an open record from ${fmtDate(o.date)}. Start day closes it.`); return; }
-    if (o && t < o.start) { await UI.alert('Check the time', `${hmOf(t)} is before ${nameOf(code)} started the current task (${hmOf(o.start)}).`); return; }
+    if (o && t < o.start && o.start.slice(11) !== (S.dayStart[wo] || '')) { await UI.alert('Check the time', `${hmOf(t)} is before ${nameOf(code)} started the current task (${hmOf(o.start)}).`); return; }
   }
   pushUndo('move');
   let moved = 0;
@@ -1692,6 +1692,10 @@ async function assign(target) {
     const o = openOf(code);
     if (o && target.type !== 'FREE' && o.wo === wo && o.sjId === target.item.id) continue;
     if (!o && target.type === 'FREE') continue;
+    if (o && t <= o.start && target.type !== 'FREE') {      // day not started yet (before 07:00): just change his task
+      Object.assign(o, { wo, sjId: target.item.id, sj: target.item.sj, sjDesc: target.item.desc, section: target.item.section || '', stype: target.item.type || 'WORK', kind: target.type === 'STANDBY' ? 'STANDBY' : 'WORK', ts: Date.now() });
+      moved++; continue;
+    }
     if (o) closeRec(o, t);
     delete S.plunch[code];
     if (target.type !== 'FREE') newRec(code, wo, target.item, target.type === 'STANDBY' ? 'STANDBY' : 'WORK', firstStart(code, wo, t));
@@ -1845,31 +1849,32 @@ function scopeModal(title, sub, candidates, okLabel, extra) {
 /* ---------------- lunch ---------------- */
 /* ---------------- stop work ---------------- */
 async function stopAction() {
-  const t = actTime();
   if (stopOn(ui.tab)) {
     const cand = S.myWOs.filter(stopOn);
-    const r = await scopeModal(`${icon('resume')} Resume work`, `Everyone goes back to the sub job they had, at ${hmOf(t)}.`, cand, 'Resume work');
+    const r = await pickModal({ title: `${icon('resume')} Resume work`, sub: 'Everyone goes back to the sub job they had.', cand, scope: 'ALL',
+      time: toHM(nowM()), timeLabel: 'Resume at', okLabel: 'Resume work' });
     if (!r) return;
-    for (const wo of r.wos) if (t < S.stop[wo].time) { await UI.alert('Check the time', `${hmOf(t)} is before the stop (${hmOf(S.stop[wo].time)}).`); return; }
+    for (const wo of r.wos) if (r.t < S.stop[wo].time) { await UI.alert('Check the time', `${r.time} is before the stop (${hmOf(S.stop[wo].time)}).`); return; }
     pushUndo('resume work');
     let n = 0;
     for (const wo of r.wos) {
       for (const it of S.stop[wo].items) {
         const o = openOf(it.code);
         if (!o || o.id !== it.recId) continue;
-        closeRec(o, t);
-        const s = getSJ(wo, it.prev.id);
-        if (s && s.status === 'OPEN') { newRec(it.code, wo, it.prev, 'WORK', t); n++; }
+        closeRec(o, r.t);
+        const sj = getSJ(wo, it.prev.id);
+        if (sj && sj.status === 'OPEN') { newRec(it.code, wo, it.prev, 'WORK', r.t); n++; }
       }
       S.stop[wo] = { on: false };
     }
     await save(); render();
-    UI.toast(`Work resumed at ${hmOf(t)} · ${n} back to work`, 'ok');
+    UI.toast(`Work resumed at ${r.time} · ${n} back to work`, 'ok');
     return;
   }
-  const cand = S.myWOs.filter(wo => dayOn(wo) && !lunchOn(wo) && !stopOn(wo) && opensOfWO(wo).some(o => o.kind === 'WORK'));
+  const working = wo => opensOfWO(wo).filter(o => o.kind === 'WORK').map(o => o.code);
+  const cand = S.myWOs.filter(wo => dayOn(wo) && !lunchOn(wo) && !stopOn(wo) && working(wo).length);
   if (!cand.length) { UI.toast('Nobody is working in your WO.', 'err'); return; }
-  // reasons: one WO -> its TIME LOST items; all WO -> union by description
+  // reasons: one WO -> its TIME LOST items; all WO -> the same reasons joined by description
   const st0 = { reason: '' };
   const reasonsFor = scope => {
     if (scope === 'ONE') return lostItems(S.lists, ui.tab);
@@ -1877,30 +1882,34 @@ async function stopAction() {
     cand.forEach(wo => lostItems(S.lists, wo).forEach(i => { const k = i.desc.trim().toUpperCase(); if (!seen.has(k)) seen.set(k, i); }));
     return Array.from(seen.values());
   };
-  const r = await scopeModal(`<span style="color:var(--red);display:flex;gap:10px;align-items:center">${icon('stop')} Stop work</span>`,
-    'The time is recorded as TIME LOST in each WO, with the reason you choose.', cand, `${icon('stop')} Stop at ${hmOf(t)}`, {
-      danger: true,
+  const r = await pickModal({ title: `<span style="color:var(--red);display:flex;gap:10px;align-items:center">${icon('stop')} Stop work</span>`,
+    sub: 'Everyone ticked goes to STAND BY with this reason (time lost). Untick who keeps working.', cand, scope: 'ALL',
+    people: working, listLabel: 'WHO STOPS', stayVerb: 'keeps working', time: toHM(nowM()), timeLabel: 'Stop at', okLabel: 'Stop work', danger: true,
+    extra: {
       html: st => { const list = reasonsFor(st.scope); if (!list.find(i => i.id === st0.reason)) st0.reason = list[0] ? list[0].id : ''; return `<div class="mlabel">REASON</div>${itemOptions(list, st0.reason)}`; },
-      click: (b) => { if (b.dataset.i) { st0.reason = b.dataset.i; return true; } return false; }
-    });
+      click: b => { if (b.dataset.i) { st0.reason = b.dataset.i; return true; } return false; }
+    } });
   if (!r) return;
   const chosen = reasonsFor(r.st.scope).find(i => i.id === st0.reason);
   if (!chosen) return;
-  const opens = r.wos.flatMap(wo => opensOfWO(wo).filter(o => o.kind === 'WORK'));
-  if (!await checkTime(t, opens)) return;
+  const opens = r.codes.map(openOf).filter(o => o && o.kind === 'WORK');
+  if (!opens.length) { UI.toast('Nobody ticked.', 'err'); return; }
+  if (!await checkTime(r.t, opens)) return;
   pushUndo('stop work');
   let n = 0;
   for (const wo of r.wos) {
+    const mine = opens.filter(o => o.wo === wo);
+    if (!mine.length) continue;
     const lost = lostItems(S.lists, wo);
     const item = lost.find(i => i.desc.trim().toUpperCase() === chosen.desc.trim().toUpperCase()) || lost.find(i => i.id === chosen.id) || lost[0];
     const items = [];
-    for (const o of opensOfWO(wo).filter(x => x.kind === 'WORK')) {
+    for (const o of mine) {
       const prev = { id: o.sjId, sj: o.sj, desc: o.sjDesc, section: o.section, type: o.stype };
-      closeRec(o, t);
-      const nr = newRec(o.code, wo, item, 'STANDBY', t);
+      closeRec(o, r.t);
+      const nr = newRec(o.code, wo, item, 'STANDBY', r.t);
       items.push({ code: o.code, recId: nr.id, prev }); n++;
     }
-    S.stop[wo] = { on: true, time: t, item, items };
+    S.stop[wo] = { on: true, time: r.t, item, items };
   }
   await save(); render();
   UI.toast(`Work stopped · ${shortDesc(chosen.desc)} · ${n} worker(s)`, 'err');
@@ -1924,7 +1933,7 @@ function pickModal(o) {
   return new Promise(res => {
     const cand = o.cand;
     if (!cand.length) { UI.toast(o.empty || 'Nothing to do in your WO.', 'err'); res(null); return; }
-    const st = { scope: cand.includes(ui.tab) ? 'ONE' : 'ALL', time: o.time, off: new Set() };
+    const st = { scope: o.scope === 'ALL' || !cand.includes(ui.tab) ? 'ALL' : 'ONE', time: o.time, off: new Set() };
     const wosOf = () => st.scope === 'ONE' ? [ui.tab] : cand;
     const m = UI.modal('', { wide: true, locked: true });
     const draw = () => {
@@ -1934,6 +1943,7 @@ function pickModal(o) {
         <div class="mlabel">WHICH WO?</div>
         <div class="seg">${cand.includes(ui.tab) ? `<button data-s="ONE" class="${st.scope === 'ONE' ? 'sel' : ''}">This WO · ${esc(ui.tab)}</button>` : ''}
           <button data-s="ALL" class="${st.scope === 'ALL' ? 'sel' : ''}">All my WO (${cand.length})</button></div>
+        ${o.extra ? o.extra.html(st) : ''}
         ${o.people ? `<div class="mlabel">${o.listLabel} <span class="lite">(untick who ${o.stayVerb})</span></div>
         <div class="pickppl">${groups.map(g => `<div class="optsec">WO ${esc(g.wo)}</div>${g.people.map(c => `<button class="ck wide ${st.off.has(c) ? '' : 'sel'}" data-c="${esc(c)}"><span class="box">${icon('check')}</span><span class="ckt">${esc(nameOf(c))}<small>${esc(statusOf(c, g.wo).text)}</small></span></button>`).join('') || '<div class="empty">Nobody on the clock.</div>'}`).join('')}</div>` : ''}
         <div class="field" style="margin-top:12px;max-width:220px"><label>${o.timeLabel}</label><input class="inp" type="time" id="pkT" value="${st.time}"></div>
@@ -1946,12 +1956,13 @@ function pickModal(o) {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.s) { st.scope = b.dataset.s; draw(); return; }
       if (b.dataset.c) { st.off.has(b.dataset.c) ? st.off.delete(b.dataset.c) : st.off.add(b.dataset.c); draw(); return; }
+      if (o.extra && o.extra.click(b, st)) { draw(); return; }
       if (b.dataset.x === 'cancel') { UI.close(); res(null); return; }
       if (b.dataset.x === 'ok') {
         if (!/^\d\d:\d\d$/.test(st.time)) { UI.toast('Write the time.', 'err'); return; }
         const wos = wosOf();
         const codes = o.people ? wos.flatMap(wo => o.people(wo)).filter(c => !st.off.has(c)) : [];
-        UI.close(); res({ wos, codes, time: st.time, t: `${today()}T${st.time}` });
+        UI.close(); res({ wos, codes, time: st.time, t: `${today()}T${st.time}`, st });
       }
     });
   });
