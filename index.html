@@ -267,6 +267,20 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .chg{border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.5;margin-bottom:8px}
 .chg.g{background:var(--greenbg);color:var(--greentx)}.chg.n{background:#F1F0F5;color:#4A4570}.chg.b{background:#E6F1FB;color:#0C447C}.chg.r{background:var(--redbg);color:var(--redtx)}
 @media (max-width:760px){.attlist{grid-template-columns:1fr}}
+.pk.done{background:var(--greenbg);border-color:#9BD3B2;margin-top:10px;width:100%}
+.pk.done b{color:var(--greentx)}
+
+.strips{display:flex;flex-direction:column;gap:8px;padding:8px 16px 0}
+.strip{display:flex;align-items:center;gap:10px;border-radius:14px;padding:12px 14px;font-weight:800;font-size:15px;text-align:left;min-height:50px}
+.strip span{flex:1}
+.strip.lunchs{background:#FBE0CC;color:#7A2E00;border:1.5px solid #F4B084}
+.strip.sends{background:var(--red);color:#fff}
+.strip.sends b{background:#fff;color:var(--red);border-radius:10px;padding:2px 8px;font-size:13px}
+.pickppl{max-height:40vh;overflow:auto;padding:2px}
+.selbar{flex-wrap:wrap}
+@media (max-width:760px){.strips{padding:8px 10px 0}.selbar span{flex:1 1 100%}.selbar .btn{flex:1}}
+.sumrow.under{background:#FFF4D6}.sumrow.under em{background:#FFE7A8;color:var(--ambertx)}
+.sumrow .h{flex-wrap:wrap;justify-content:flex-end}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -685,7 +699,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -693,7 +707,7 @@ const QSL = {
   web: 'www.qslgroup.com',
   revNo: '00',
   revDate: '20/10/2026',
-  forms: { DAILY: 'QSL_HH_DAILY', TOTAL: 'QSL_HH_TOTAL', CLOSE: 'QSL_HH_CLOSE' }
+  forms: { DAILY: 'QSL_HH_DAILY', TOTAL: 'QSL_HH_TOTAL', CLOSE: 'QSL_HH_CLOSE', PERSON: 'QSL_HH_PERSON', WEEK: 'QSL_HH_WEEK' }
 };
 
 const REASONS = [
@@ -710,6 +724,45 @@ const REASONS = [
 const REASON = Object.fromEntries(REASONS.map(r => [r.id, r]));
 const UNITS = ['in-dia', 'm²', 'm', 'ft', 'kg', 'ton', 'each', 'joint'];
 const DEFAULT_TRADES = ['Fitter', 'Welder', 'Helper', 'Rigger', 'Operator', 'Painter', 'QC Inspector', 'Supervisor'];
+/* work schedule: same start and lunch every day, end time per weekday (0 = Sunday, '' = no schedule) */
+const DEFAULT_SCHEDULE = { start: '07:00', lunchStart: '12:00', lunchEnd: '13:00', end: ['', '17:00', '18:00', '18:00', '18:00', '16:00', '17:00'] };
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const toMin = hm => { const [h, m] = String(hm || '').split(':').map(Number); return isNaN(h) ? NaN : h * 60 + (m || 0); };
+const toHM = mins => `${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}`;
+function schedFor(lists, date) {
+  const s = Object.assign({}, DEFAULT_SCHEDULE, (lists && lists.schedule) || {});
+  const end = (s.end || [])[parseLocal(date).getDay()] || '';
+  if (!end) return null;
+  const lunch = Math.max(0, Math.min(toMin(end), toMin(s.lunchEnd)) - Math.max(toMin(s.start), toMin(s.lunchStart)));
+  return { start: s.start, end, lunchStart: s.lunchStart, lunchEnd: s.lunchEnd, hours: round2((toMin(end) - toMin(s.start) - lunch) / 60) };
+}
+/* short name for the phone: words 1 and 3 (or 1 and 2 when there are two); "Del", "De", "La"... stay with the surname */
+function autoShort(name) {
+  const PART = ['de', 'del', 'la', 'las', 'los', 'da', 'das', 'do', 'dos', 'di', 'van', 'von', 'y', 'san'];
+  const raw = String(name || '').trim().split(/\s+/).filter(Boolean);
+  const t = [];
+  for (let i = 0; i < raw.length; i++) {
+    let w = raw[i];
+    while (PART.includes(raw[i].toLowerCase()) && i + 1 < raw.length) { i++; w += ' ' + raw[i]; }
+    t.push(w);
+  }
+  if (t.length >= 3) return t[0] + ' ' + t[2];
+  return t.join(' ');
+}
+const shortName = w => (w && (w.short || autoShort(w.name))) || '';
+/* marks of one person on one day against the schedule */
+function dayMarks(lists, date, total, extra) {
+  const m = [];
+  if (extra && extra.late) m.push(`LATE ${extra.late}`);
+  if (extra && extra.left) m.push(`LEFT ${extra.left}`);
+  const s = schedFor(lists, date);
+  if (s && total > 0) {
+    const d = round2(total - s.hours);
+    if (d > 0.009) m.push(`OT +${fmtH(d)}`);
+    else if (d < -0.009) m.push(`-${fmtH(-d)}`);
+  }
+  return m.join(' · ');
+}
 
 /* ---------------- small utils ---------------- */
 const pad2 = n => String(n).padStart(2, '0');
@@ -804,7 +857,7 @@ const Store = {
 
 /* ---------------- lists ---------------- */
 function emptyLists() {
-  return { workers: [], trades: DEFAULT_TRADES.slice(), tradeMap: {}, supervisors: [], wos: [], sjs: [], accessCode: '', updated: '' };
+  return { workers: [], trades: DEFAULT_TRADES.slice(), tradeMap: {}, supervisors: [], wos: [], sjs: [], accessCode: '', schedule: clone(DEFAULT_SCHEDULE), updated: '' };
 }
 function openWOs(lists) { return lists.wos.filter(w => w.status === 'OPEN'); }
 function openSJs(lists, wo) { return lists.sjs.filter(s => s.wo === wo && s.status === 'OPEN'); }
@@ -925,6 +978,7 @@ function buildDaily(lists, records, date, absences) {
   let nAbsent = 0;
   (absences || []).filter(a => a.date === date && !a.cancelled).forEach(a => {
     const p = byPerson.get(a.code);
+    if (a.kind === 'LEFT') { if (p) p.left = a.left; return; }
     if (a.late) { if (p) p.late = a.late; return; }
     if (p) return;                                   // marked absent but has hours: he worked
     byPerson.set(a.code, { code: a.code, name: a.name, trade: a.trade, total: 0, absent: true, late: '',
@@ -934,7 +988,7 @@ function buildDaily(lists, records, date, absences) {
   const order = tradeOrder(lists, Array.from(byPerson.values()).map(p => p.trade));
   const persons = Array.from(byPerson.values()).sort((a, b) =>
     (order.indexOf(a.trade) - order.indexOf(b.trade)) || cmpStr(a.name, b.name));
-  persons.forEach(p => { p.lines = Array.from(p.lines.values()).sort((a, b) => cmpStr(a.first, b.first)); });
+  persons.forEach(p => { p.lines = Array.from(p.lines.values()).sort((a, b) => cmpStr(a.first, b.first)); p.marks = p.absent ? '' : dayMarks(lists, date, p.total, p); });
   const sum = f => round2(recs.filter(f).reduce((s, r) => s + recHours(r), 0));
   return { date, persons, total: sum(() => true), lost: sum(isLost), safety: sum(isSafety), nAbsent,
     nWorkers: persons.length - nAbsent, nWO: new Set(recs.map(r => r.wo)).size, openCount: records.filter(r => r.date === date && !r.end).length };
@@ -1013,6 +1067,72 @@ function buildClose(lists, records, wo) {
   const safety = sumByTrade(wr.filter(isSafety), tc);
   const total = sumByTrade(wr, tc);
   return { w, tc, sections, productive, lost, safety, total, workers: new Set(wr.map(r => r.code)).size };
+}
+
+/* Report 4 - by worker between two dates */
+function personDays(lists, records, absences, from, to, codeFilter) {
+  const inRange = d => d >= from && d <= to;
+  const recs = records.filter(r => r.end && inRange(r.date) && (!codeFilter || r.code === codeFilter));
+  const people = new Map();
+  const get = (code, name, trade) => {
+    if (!people.has(code)) people.set(code, { code, name, trade, days: new Map() });
+    return people.get(code);
+  };
+  const day = (p, date) => {
+    if (!p.days.has(date)) p.days.set(date, { date, total: 0, lines: new Map(), absent: false, late: '', left: '' });
+    return p.days.get(date);
+  };
+  recs.forEach(r => {
+    const d = day(get(r.code, r.name, r.trade), r.date);
+    const k = r.wo + '|' + recKey(r);
+    if (!d.lines.has(k)) d.lines.set(k, { wo: r.wo, sj: r.sj, desc: r.sjDesc, stype: r.stype || 'WORK', hours: 0, first: r.start });
+    const ln = d.lines.get(k); const h = recHours(r);
+    ln.hours = round2(ln.hours + h); d.total = round2(d.total + h);
+    if (r.start < ln.first) ln.first = r.start;
+  });
+  (absences || []).filter(a => !a.cancelled && inRange(a.date) && (!codeFilter || a.code === codeFilter)).forEach(a => {
+    const p = get(a.code, a.name, a.trade);
+    const has = p.days.has(a.date);
+    if (a.kind === 'LEFT') { if (has) p.days.get(a.date).left = a.left; return; }
+    if (a.late) { if (has) p.days.get(a.date).late = a.late; return; }
+    if (!has) day(p, a.date).absent = true;
+  });
+  const list = Array.from(people.values()).map(p => {
+    const days = Array.from(p.days.values()).sort((a, b) => cmpStr(a.date, b.date));
+    let total = 0, ot = 0, under = 0, worked = 0, absent = 0;
+    days.forEach(d => {
+      d.lines = Array.from(d.lines.values()).sort((a, b) => cmpStr(a.first, b.first));
+      d.marks = d.absent ? 'ABSENT' : dayMarks(lists, d.date, d.total, d);
+      if (d.absent) { absent++; return; }
+      worked++; total = round2(total + d.total);
+      const s = schedFor(lists, d.date);
+      if (s) { const diff = round2(d.total - s.hours); if (diff > 0) ot = round2(ot + diff); else under = round2(under - diff); }
+    });
+    return { code: p.code, name: p.name, trade: p.trade, days, total, ot, under, worked, absent };
+  });
+  const order = tradeOrder(lists, list.map(p => p.trade));
+  list.sort((a, b) => (order.indexOf(a.trade) - order.indexOf(b.trade)) || cmpStr(a.name, b.name));
+  return list;
+}
+function buildPerson(lists, records, absences, from, to, code) {
+  const workers = personDays(lists, records, absences, from, to, code || '');
+  return { from, to, workers, total: round2(workers.reduce((s, w) => s + w.total, 0)), ot: round2(workers.reduce((s, w) => s + w.ot, 0)) };
+}
+/* Report 5 - weekly timesheet (Monday to Sunday) */
+function weekDates(anyDate) {
+  const d = parseLocal(anyDate); const back = (d.getDay() + 6) % 7;
+  const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - back);
+  return Array.from({ length: 7 }, (_, i) => todayStr(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i)));
+}
+function buildWeek(lists, records, absences, anyDate) {
+  const dates = weekDates(anyDate);
+  const workers = personDays(lists, records, absences, dates[0], dates[6], '').map(w => {
+    const by = new Map(w.days.map(d => [d.date, d]));
+    return Object.assign(w, { cells: dates.map(dt => { const d = by.get(dt); return !d ? null : d.absent ? 'ABS' : d.total; }),
+      flags: dates.map(dt => { const d = by.get(dt); return d && !d.absent ? d.marks : ''; }) });
+  });
+  const dayTotals = dates.map((dt, i) => round2(workers.reduce((s, w) => s + (typeof w.cells[i] === 'number' ? w.cells[i] : 0), 0)));
+  return { dates, workers, dayTotals, total: round2(dayTotals.reduce((a, b) => a + b, 0)), ot: round2(workers.reduce((s, w) => s + w.ot, 0)) };
 }
 
 /* =====================================================================
@@ -1117,7 +1237,7 @@ function pdfDaily(ctx, data) {
   const startY = header() + 1;
   const body = [];
   data.persons.forEach((p, i) => {
-    body.push(rowOf([String(i + 1), p.name, p.trade, '', '', p.late ? `LATE · arrived ${p.late}` : '', fmtH(p.total)], p.late ? 'lategroup' : 'group'));
+    body.push(rowOf([String(i + 1), p.name, p.trade, '', '', p.marks || '', fmtH(p.total)], p.marks ? 'lategroup' : 'group'));
     p.lines.forEach(l => body.push(rowOf(['', '', '', l.wo, l.sj, l.desc + (l.stype === 'LOST' ? '  (Lost time)' : ''), fmtH(l.hours)], l.stype === 'LOST' ? 'lost' : l.stype === 'ABSENT' ? 'absent' : '')));
   });
   if (!data.persons.length) body.push(['', 'No closed records for this date.', '', '', '', '', '']);
@@ -1186,6 +1306,64 @@ function pdfClose(ctx, data) {
   return doc;
 }
 
+function pdfPerson(ctx, data) {
+  const doc = pdfDoc();
+  const opt = { logo: ctx.logo, logoRatio: ctx.logoRatio, title: 'MAN-HOURS BY WORKER', form: QSL.forms.PERSON, prepared: ctx.prepared, date: todayStr(),
+    summary: `Period: ${fmtDateLong(data.from)} to ${fmtDateLong(data.to)}  |  Workers: ${data.workers.length}  |  Total man-hours: ${fmtH(data.total)}  |  Overtime: ${fmtH(data.ot)}` };
+  const header = () => pdfHeader(doc, opt);
+  const startY = header() + 1;
+  const body = [];
+  data.workers.forEach(w => {
+    body.push(rowOf([w.name, '', '', `${w.trade}  ·  Days worked: ${w.worked}${w.absent ? `  ·  Absent: ${w.absent}` : ''}`, w.ot ? `OT +${fmtH(w.ot)}` : '', fmtH(w.total)], 'group'));
+    w.days.forEach(d => {
+      body.push(rowOf([`${fmtDate(d.date)} · ${DAY_NAMES[parseLocal(d.date).getDay()].slice(0, 3)}`, '', '', '', d.marks || '', d.absent ? '0.00' : fmtH(d.total)], d.absent ? 'absent' : 'sub'));
+      d.lines.forEach(l => body.push(rowOf(['', l.wo, l.sj, l.desc + (l.stype === 'LOST' ? '  (Lost time)' : ''), '', fmtH(l.hours)], l.stype === 'LOST' ? 'lost' : '')));
+    });
+  });
+  if (!data.workers.length) body.push(['', '', '', 'No hours in this period.', '', '']);
+  body.push(rowOf(['TOTAL', '', '', '', data.ot ? `OT +${fmtH(data.ot)}` : '', fmtH(data.total)], 'total'));
+  pdfTable(doc, startY, ['DATE / WORKER', 'WO', 'SJ', 'DESCRIPTION', 'NOTES', 'HOURS'], body, header,
+    { 0: { cellWidth: 52 }, 1: { cellWidth: 20, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' }, 4: { cellWidth: 44, halign: 'center' }, 5: { cellWidth: 18, halign: 'center' } });
+  pdfFooters(doc, ctx.ep);
+  return doc;
+}
+function pdfWeek(ctx, data) {
+  const doc = pdfDoc();
+  const opt = { logo: ctx.logo, logoRatio: ctx.logoRatio, title: 'WEEKLY TIMESHEET', form: QSL.forms.WEEK, prepared: ctx.prepared, date: todayStr(),
+    summary: `Week: ${fmtDateLong(data.dates[0])} to ${fmtDateLong(data.dates[6])}  |  Workers: ${data.workers.length}  |  Total man-hours: ${fmtH(data.total)}  |  Overtime: ${fmtH(data.ot)}` };
+  const header = () => pdfHeader(doc, opt);
+  const startY = header() + 1;
+  const head = ['#', 'WORKER', 'TRADE'].concat(data.dates.map(d => `${DAY_NAMES[parseLocal(d).getDay()].slice(0, 3).toUpperCase()} ${d.slice(8)}`), ['TOTAL', 'OT']);
+  const body = data.workers.map((w, i) => {
+    const r = [String(i + 1), w.name, w.trade].concat(w.cells.map(v => v === null ? '-' : v === 'ABS' ? 'ABS' : fmtH(v)), [fmtH(w.total), w.ot ? fmtH(w.ot) : '-']);
+    r._abs = w.cells.map((v, k) => v === 'ABS' ? k + 3 : -1).filter(k => k >= 0);
+    r._flag = w.flags.map((f, k) => /LEFT|LATE|(^| )-\d/.test(f) ? k + 3 : -1).filter(k => k >= 0);
+    return r;
+  });
+  if (!body.length) body.push(['', 'No hours this week.'].concat(Array(head.length - 2).fill('')));
+  body.push(rowOf(['', 'TOTAL', ''].concat(data.dayTotals.map(fmtH), [fmtH(data.total), fmtH(data.ot)]), 'total'));
+  const cs = { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 52 }, 2: { cellWidth: 32 } };
+  for (let i = 3; i < head.length; i++) cs[i] = { halign: 'center' };
+  doc.autoTable({
+    startY, head: [head], body, theme: 'grid', margin: { top: 42, left: 8, right: 8, bottom: 16 },
+    styles: { font: 'helvetica', fontSize: 7.8, cellPadding: 1.4, lineColor: [191, 191, 191], lineWidth: 0.15, textColor: [0, 0, 0], valign: 'middle' },
+    headStyles: { fillColor: PDFC.navy, textColor: 255, fontStyle: 'bold', halign: 'center', lineColor: PDFC.navy },
+    columnStyles: cs, didDrawPage: () => { header(); },
+    didParseCell: d => {
+      const raw = d.row.raw; if (d.section !== 'body' || !raw) return;
+      if (raw._style === 'total') { d.cell.styles.fillColor = [214, 220, 228]; d.cell.styles.fontStyle = 'bold'; return; }
+      if (raw._abs && raw._abs.includes(d.column.index)) { d.cell.styles.textColor = [192, 57, 43]; d.cell.styles.fontStyle = 'bold'; }
+      if (raw._flag && raw._flag.includes(d.column.index)) { d.cell.styles.textColor = [176, 96, 0]; d.cell.styles.fontStyle = 'bold'; }
+      if (d.column.index === head.length - 1 && d.cell.raw !== '-') { d.cell.styles.fontStyle = 'bold'; }
+    }
+  });
+  const y = Math.min(doc.lastAutoTable.finalY + 5, doc.internal.pageSize.getHeight() - 14);
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(7);
+  doc.text('ABS = absent  ·  orange = late arrival, left early or short day  ·  OT = hours above the schedule of each day', 8, y);
+  pdfFooters(doc, ctx.ep);
+  return doc;
+}
+
 /* =====================================================================
    EXCEL (SheetJS) - same content as the PDFs
    ===================================================================== */
@@ -1208,7 +1386,7 @@ function xlsxDaily(prepared, data) {
     `Workers: ${data.nWorkers}${data.nAbsent ? ` | Absent: ${data.nAbsent}` : ''} | WO worked: ${data.nWO} | Total man-hours: ${fmtH(data.total)} | Lost time: ${fmtH(data.lost)} | Safety: ${fmtH(data.safety)}`);
   rows.push(['#', 'Worker', 'Trade', 'WO', 'SJ', 'Description', 'Type', 'Hours']);
   data.persons.forEach((p, i) => {
-    rows.push([i + 1, p.name, p.trade, '', '', p.late ? `TOTAL · LATE ${p.late}` : 'TOTAL', '', p.total]);
+    rows.push([i + 1, p.name, p.trade, '', '', p.marks ? `TOTAL · ${p.marks}` : 'TOTAL', '', p.total]);
     p.lines.forEach(l => rows.push(['', '', '', l.wo, l.sj, l.desc, l.stype === 'ABSENT' ? 'Absent' : typeLabel(l.stype), l.hours]));
   });
   rows.push(['', 'TOTAL OF THE DAY', '', '', '', '', '', data.total]);
@@ -1239,6 +1417,28 @@ function xlsxClose(prepared, data) {
   rows.push(['', '', 'Time lost / stand by'].concat(tradeVals(tcols, data.lost)));
   rows.push(['TOTAL WO', '', ''].concat(tradeVals(tcols, data.total)));
   return [{ name: 'WO ' + w.wo, rows, cols: [28, 8, 40].concat(tcols.map(() => 12), [10, 8, 8, 10]).map(x => ({ wch: x })) }];
+}
+
+function xlsxPerson(prepared, data) {
+  const rows = xlsxHead('MAN-HOURS BY WORKER', QSL.forms.PERSON, prepared, todayStr(),
+    `Period: ${fmtDateLong(data.from)} to ${fmtDateLong(data.to)} | Total man-hours: ${fmtH(data.total)} | Overtime: ${fmtH(data.ot)}`);
+  rows.push(['Worker', 'Trade', 'Date', 'Day', 'WO', 'SJ', 'Description', 'Notes', 'Hours']);
+  data.workers.forEach(w => {
+    rows.push([w.name, w.trade, '', '', '', '', `TOTAL · days ${w.worked}${w.absent ? ` · absent ${w.absent}` : ''}`, w.ot ? `OT +${fmtH(w.ot)}` : '', w.total]);
+    w.days.forEach(d => {
+      if (d.absent) { rows.push([w.name, w.trade, d.date, DAY_NAMES[parseLocal(d.date).getDay()], '', '', 'ABSENT', '', 0]); return; }
+      d.lines.forEach((l, i) => rows.push([w.name, w.trade, d.date, DAY_NAMES[parseLocal(d.date).getDay()], l.wo, l.sj, l.desc, i === 0 ? d.marks : '', l.hours]));
+    });
+  });
+  return [{ name: 'By worker', rows, cols: [28, 16, 11, 10, 8, 7, 40, 18, 8].map(x => ({ wch: x })) }];
+}
+function xlsxWeek(prepared, data) {
+  const rows = xlsxHead('WEEKLY TIMESHEET', QSL.forms.WEEK, prepared, todayStr(),
+    `Week: ${fmtDateLong(data.dates[0])} to ${fmtDateLong(data.dates[6])} | Total man-hours: ${fmtH(data.total)} | Overtime: ${fmtH(data.ot)}`);
+  rows.push(['#', 'Worker', 'Trade'].concat(data.dates.map(d => `${DAY_NAMES[parseLocal(d).getDay()].slice(0, 3)} ${d}`), ['Total', 'OT']));
+  data.workers.forEach((w, i) => rows.push([i + 1, w.name, w.trade].concat(w.cells.map(v => v === null ? '' : v), [w.total, w.ot])));
+  rows.push(['', 'TOTAL', ''].concat(data.dayTotals, [data.total, data.ot]));
+  return [{ name: 'Week ' + data.dates[0], rows, cols: [4, 28, 16].concat(data.dates.map(() => 12), [9, 8]).map(x => ({ wch: x })) }];
 }
 
 /* =====================================================================
@@ -1273,15 +1473,29 @@ const UI = {
   /* a window that redraws itself on every tap keeps its scroll position */
   keepScrollOnRedraw(el) {
     const d = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
-    const LISTS = '.checklist,.sjpick,.pick,.prev,.sumlist,.opts';
+    const key = x => x.tagName + '.' + (typeof x.className === 'string' ? x.className.split(' ')[0] : '');
     Object.defineProperty(el, 'innerHTML', {
       configurable: true,
       get() { return d.get.call(this); },
       set(v) {
-        const before = Array.from(this.querySelectorAll(LISTS)).map(x => x.scrollTop);
+        // remember every list that was scrolled (by kind and position), redraw, put them back
+        const seen = {};
+        const saved = [];
+        Array.from(this.querySelectorAll('*')).forEach(x => {
+          const k = key(x); seen[k] = (seen[k] || 0) + 1;
+          if (x.scrollTop > 0) saved.push([k, seen[k], x.scrollTop]);
+        });
         const top = this.scrollTop;
         d.set.call(this, v);
-        Array.from(this.querySelectorAll(LISTS)).forEach((x, i) => { if (before[i]) x.scrollTop = before[i]; });
+        if (saved.length) {
+          const seen2 = {};
+          const want = new Map(saved.map(s => [s[0] + '#' + s[1], s[2]]));
+          Array.from(this.querySelectorAll('*')).forEach(x => {
+            const k = key(x); seen2[k] = (seen2[k] || 0) + 1;
+            const t = want.get(k + '#' + seen2[k]);
+            if (t) x.scrollTop = t;
+          });
+        }
         this.scrollTop = top;
       }
     });
@@ -1378,7 +1592,7 @@ function defaultState() {
   return {
     lists: emptyLists(), records: [], sup: '', dev: 'Device-' + Math.random().toString(36).slice(2, 6).toUpperCase(),
     code: '', timeManual: '',
-    myWOs: [], crews: {}, activeSJ: {}, customSJ: [], absences: [],
+    myWOs: [], crews: {}, activeSJ: {}, customSJ: [], absences: [], completed: [], plunch: {}, lunchDone: {}, dayStart: {},
     days: {}, ended: {}, lunch: {}, stop: {},
     lastSend: 0, undo: []
   };
@@ -1392,7 +1606,7 @@ async function save() {
 const iosBrowser = () => (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !navigator.standalone;
 const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
 const W = code => S.lists.workers.find(w => w.code === code);
-const nameOf = code => (W(code) || {}).name || code;
+const nameOf = code => shortName(W(code)) || code;
 const today = () => todayStr();
 const actTime = () => `${today()}T${S.timeManual || nowHM()}`;
 const crewOf = wo => S.crews[wo] || (S.crews[wo] = []);
@@ -1402,7 +1616,8 @@ const lunchOn = wo => !!(S.lunch[wo] && S.lunch[wo].on);
 const stopOn = wo => !!(S.stop[wo] && S.stop[wo].on);
 function allSJs(wo) { return S.lists.sjs.filter(s => s.wo === wo).concat(S.customSJ.filter(s => s.wo === wo)); }
 function getSJ(wo, id) { return allSJs(wo).find(s => sjKey(s) === id); }
-function workList(wo) { return allSJs(wo).filter(s => s.status === 'OPEN' && sjType(s) !== 'LOST'); }
+const isDone = (wo, id) => S.completed.some(c => c.wo === wo && c.sjId === id);
+function workList(wo) { return allSJs(wo).filter(s => s.status === 'OPEN' && sjType(s) !== 'LOST' && !isDone(wo, sjKey(s))); }
 function itemOf(s) { return { id: sjKey(s), sj: s.sj, desc: s.desc, section: s.section || '', type: s.type || sjType(s) }; }
 function shortDesc(d) { return String(d || '').replace(/^TIME LOST (FOR|DUE TO)\s*/i, '').replace(/^STAND BY (DUE TO)?\s*/i, 'Stand by ').trim(); }
 function openOf(code) {
@@ -1410,10 +1625,10 @@ function openOf(code) {
   return null;
 }
 const opensOfWO = wo => S.records.filter(r => !r.end && r.wo === wo);
-function pending() { return S.records.filter(r => r.ts > S.lastSend).length + S.absences.filter(a => a.ts > S.lastSend).length + S.customSJ.filter(c => !c.sent).length; }
+function pending() { return S.records.filter(r => r.ts > S.lastSend).length + S.absences.filter(a => a.ts > S.lastSend).length + S.completed.filter(c => c.ts > S.lastSend).length + S.customSJ.filter(c => !c.sent).length; }
 
 function pushUndo(label) {
-  S.undo.push({ label, snap: JSON.stringify({ records: S.records, lunch: S.lunch, stop: S.stop, days: S.days, ended: S.ended, crews: S.crews, absences: S.absences }) });
+  S.undo.push({ label, snap: JSON.stringify({ records: S.records, lunch: S.lunch, stop: S.stop, days: S.days, ended: S.ended, crews: S.crews, absences: S.absences, completed: S.completed, activeSJ: S.activeSJ, plunch: S.plunch, lunchDone: S.lunchDone, dayStart: S.dayStart }) });
   if (S.undo.length > UNDO_MAX) S.undo.shift();
 }
 function closeRec(r, t) {
@@ -1436,6 +1651,8 @@ function statusOf(code, wo) {
     return { cls: 'work', text: `${where}${o.sj} · ${o.sjDesc} · ${hmOf(o.start)}` };
   }
   if (isAbsent(code)) return { cls: 'abs', text: 'Absent today · tap if he arrives' };
+  if (isLeft(code)) return { cls: 'abs', text: `Left at ${leftOf(code).left} · tap if he comes back` };
+  if (onPLunch(code)) return { cls: 'lunch', text: `Lunch since ${hmOf(S.plunch[code].time)} · tap when back` };
   if (lunchOn(wo) && S.lunch[wo].items.some(i => i.code === code)) return { cls: 'lunch', text: 'Lunch' };
   return { cls: 'free', text: dayOn(wo) ? 'Free (not counting)' : S.ended[wo] === today() ? 'Day ended' : 'Day not started' };
 }
@@ -1446,10 +1663,21 @@ async function checkTime(t, recs) {
 }
 
 /* ---------------- assign ---------------- */
+/* the first task of the day starts at the day start time (07:00) or at the time he arrived late */
+function firstStart(code, wo, t) {
+  if (S.timeManual) return t;
+  if (S.records.some(r => r.code === code && r.date === today())) return t;
+  const late = S.absences.find(a => isAbs(a) && a.code === code && a.date === today() && !a.cancelled && a.late);
+  const st = late ? late.late : S.dayStart[wo];
+  if (!st) return t;
+  const t0 = `${today()}T${st}`;
+  if (toMin(hmOf(t)) - toMin(st) > 60) return t;          // assigned much later: count from now
+  return t0 < t ? t0 : t;
+}
 async function assign(target) {
   const wo = ui.tab;
   if (!dayOn(wo)) { UI.toast(`Tap Start day for WO ${wo} first.`, 'err'); return; }
-  ui.sel = ui.sel.filter(c => crewOf(wo).includes(c) && !isAbsent(c));
+  ui.sel = ui.sel.filter(c => crewOf(wo).includes(c) && !outToday(c));
   if (!ui.sel.length) { UI.toast('First tap a worker.', 'err'); return; }
   if (lunchOn(wo)) { UI.toast('This WO is at lunch. Tap Back from lunch first.', 'err'); return; }
   const t = actTime();
@@ -1465,7 +1693,8 @@ async function assign(target) {
     if (o && target.type !== 'FREE' && o.wo === wo && o.sjId === target.item.id) continue;
     if (!o && target.type === 'FREE') continue;
     if (o) closeRec(o, t);
-    if (target.type !== 'FREE') newRec(code, wo, target.item, target.type === 'STANDBY' ? 'STANDBY' : 'WORK', t);
+    delete S.plunch[code];
+    if (target.type !== 'FREE') newRec(code, wo, target.item, target.type === 'STANDBY' ? 'STANDBY' : 'WORK', firstStart(code, wo, t));
     moved++;
   }
   if (!moved) S.undo.pop();
@@ -1486,7 +1715,7 @@ async function startDayModal(wo) {
   const old = S.records.filter(r => !r.end && r.date < today() && crew.includes(r.code));
   const holdItems = lostItems(S.lists, wo).concat(safetyItems(S.lists, wo));
   const absentNow = new Set(absencesOf(wo).map(a => a.code));
-  const st = { step: 'ATT', absent: absentNow, mode: 'WORK', item: holdItems[0] ? holdItems[0].id : '', codes: null, time: nowHM(), close: '17:00' };
+  const st = { step: 'ATT', absent: absentNow, mode: 'WORK', item: holdItems[0] ? holdItems[0].id : '', codes: null, time: startDefault(), close: (schedFor(S.lists, todayStr(new Date(Date.now() - 86400000))) || {}).end || '17:00' };
   const present = () => crew.filter(c => !st.absent.has(c));
   const m = UI.modal('', { wide: true, locked: true });
   const draw = () => {
@@ -1497,7 +1726,7 @@ async function startDayModal(wo) {
         <p class="msub">Step 1 of 2 · Everyone is Present. Tap who is absent today.</p>
         <div class="attk"><div class="ok">Present<b>${p}</b></div><div class="no">Absent<b>${st.absent.size}</b></div></div>
         <div class="attlist">${crew.map(c => { const w = W(c) || {}; const a = st.absent.has(c);
-          return `<button class="att ${a ? 'abs' : ''}" data-att="${esc(c)}"><span class="nm"><b>${esc(w.name || c)}</b><small>${esc(w.trade || '')}</small></span><span class="pill">${a ? 'Absent' : 'Present'}</span></button>`; }).join('')}</div>
+          return `<button class="att ${a ? 'abs' : ''}" data-att="${esc(c)}"><span class="nm"><b>${esc(shortName(w) || c)}</b><small>${esc(w.trade || '')}</small></span><span class="pill">${a ? 'Absent' : 'Present'}</span></button>`; }).join('')}</div>
         <div class="mbtns"><button class="btn ghost" data-x="cancel">Cancel</button><button class="btn green" data-x="next" ${p ? '' : 'disabled'}>Confirm ${p} present · Next</button></div>`;
       return;
     }
@@ -1516,7 +1745,8 @@ async function startDayModal(wo) {
         <div class="mlabel">WHO IS ON HOLD? <span class="lite">(${st.codes.size} selected)</span></div>
         <div class="checklist">${present().map(c => `<button class="ck ${st.codes.has(c) ? 'sel' : ''}" data-c="${esc(c)}"><span class="box">${icon('check')}</span>${esc(nameOf(c))}</button>`).join('')}</div>
         <div class="field" style="margin-top:12px;max-width:200px"><label>Start time</label><input class="inp" type="time" id="sdTime" value="${st.time}"></div>`
-      : `<p class="msub" style="margin-top:12px">Then tap each worker and the sub job where they go.</p>`}
+      : `<div class="field" style="margin-top:12px;max-width:200px"><label>Start time</label><input class="inp" type="time" id="sdTime" value="${st.time}"></div>
+        <p class="msub">Then tap each worker and the sub job where they go. Their hours count from the start time.</p>`}
       <div class="mbtns"><button class="btn ghost" data-x="back">Back</button><button class="btn primary" data-x="ok">${icon('play')} Start day</button></div>`;
   };
   draw();
@@ -1534,8 +1764,10 @@ async function startDayModal(wo) {
     if (old.length) {
       for (const o of old) if (`${o.date}T${st.close}` <= o.start) { await UI.alert('Check the time', `${st.close} is before ${o.name} started on ${fmtDate(o.date)} (${hmOf(o.start)}).`); return; }
     }
-    if (st.mode === 'HOLD' && (!st.item || !st.codes.size || !st.time)) { UI.toast('Choose reason, people and time.', 'err'); return; }
+    if (!/^\d\d:\d\d$/.test(st.time)) { UI.toast('Write the start time.', 'err'); return; }
+    if (st.mode === 'HOLD' && (!st.item || !st.codes.size)) { UI.toast('Choose reason and people.', 'err'); return; }
     pushUndo('start day');
+    S.dayStart[wo] = st.time;
     old.forEach(o => { o.end = `${o.date}T${st.close}`; o.ts = Date.now(); });
     setAbsences(wo, st.absent);
     S.days[wo] = today(); delete S.ended[wo];
@@ -1552,14 +1784,15 @@ async function startDayModal(wo) {
 }
 /* ---------------- attendance ---------------- */
 // absences: { id, date, code, name, trade, wo, sup, dev, late:'' | 'HH:MM', cancelled, ts }
-function absencesOf(wo, date) { const d = date || today(); return S.absences.filter(a => a.wo === wo && a.date === d && !a.cancelled && !a.late); }
-function isAbsent(code) { return S.absences.some(a => a.code === code && a.date === today() && !a.cancelled && !a.late); }
+const isAbs = a => a.kind !== 'LEFT';
+function absencesOf(wo, date) { const d = date || today(); return S.absences.filter(a => isAbs(a) && a.wo === wo && a.date === d && !a.cancelled && !a.late); }
+function isAbsent(code) { return S.absences.some(a => isAbs(a) && a.code === code && a.date === today() && !a.cancelled && !a.late); }
 function isAvailable(code) { const w = W(code); return !!w && w.enabled !== false; }
 function setAbsences(wo, set) {
   const d = today();
-  S.absences.filter(a => a.wo === wo && a.date === d && !a.cancelled && !a.late && !set.has(a.code)).forEach(a => { a.cancelled = true; a.ts = Date.now(); });
+  S.absences.filter(a => isAbs(a) && a.wo === wo && a.date === d && !a.cancelled && !a.late && !set.has(a.code)).forEach(a => { a.cancelled = true; a.ts = Date.now(); });
   set.forEach(code => {
-    const cur = S.absences.find(a => a.wo === wo && a.date === d && a.code === code);
+    const cur = S.absences.find(a => isAbs(a) && a.wo === wo && a.date === d && a.code === code);
     if (cur) { cur.cancelled = false; cur.late = ''; cur.ts = Date.now(); return; }
     const w = W(code) || { name: code, trade: '' };
     S.absences.push({ id: uid(), date: d, code, name: w.name, trade: w.trade || '', wo, sup: S.sup, dev: S.dev, late: '', cancelled: false, ts: Date.now() });
@@ -1569,7 +1802,7 @@ async function arrivedLate(code) {
   const t = S.timeManual || nowHM();
   if (!await UI.confirm('Arrived late', `${nameOf(code)} is marked Absent.\nMark as present, arrived at ${t}?\nThe report will show LATE ${t}.`, 'Present · LATE ' + t)) return;
   pushUndo('late arrival');
-  S.absences.filter(a => a.code === code && a.date === today() && !a.cancelled && !a.late).forEach(a => { a.late = t; a.ts = Date.now(); });
+  S.absences.filter(a => isAbs(a) && a.code === code && a.date === today() && !a.cancelled && !a.late).forEach(a => { a.late = t; a.ts = Date.now(); });
   ui.sel = [code];
   if (isPhone()) ui.pane = 'jobs';
   await save(); render();
@@ -1610,44 +1843,6 @@ function scopeModal(title, sub, candidates, okLabel, extra) {
 }
 
 /* ---------------- lunch ---------------- */
-async function lunchAction() {
-  const t = actTime();
-  if (lunchOn(ui.tab)) {
-    const cand = S.myWOs.filter(lunchOn);
-    const r = await scopeModal(`${icon('coffee')} Back from lunch`, `Everyone goes back to the task they had, at ${hmOf(t)}.`, cand, 'Back from lunch');
-    if (!r) return;
-    for (const wo of r.wos) if (t < S.lunch[wo].time) { await UI.alert('Check the time', `${hmOf(t)} is before lunch started (${hmOf(S.lunch[wo].time)}).`); return; }
-    pushUndo('back from lunch');
-    let n = 0;
-    for (const wo of r.wos) {
-      for (const it of S.lunch[wo].items) {
-        if (openOf(it.code)) continue;
-        const s = getSJ(wo, it.item.id);
-        if (it.kind === 'WORK' && (!s || s.status !== 'OPEN')) continue;
-        newRec(it.code, wo, it.item, it.kind, t); n++;
-      }
-      S.lunch[wo] = { on: false, time: '', items: [] };
-    }
-    await save(); render();
-    UI.toast(`Back from lunch at ${hmOf(t)} · ${n} back to their task`, 'ok');
-  } else {
-    const cand = S.myWOs.filter(wo => dayOn(wo) && !lunchOn(wo) && !stopOn(wo) && opensOfWO(wo).length);
-    const r = await scopeModal(`${icon('coffee')} Lunch`, `Lunch time does not count. Starts at ${hmOf(t)}.`, cand, 'Start lunch');
-    if (!r) return;
-    const opens = r.wos.flatMap(opensOfWO);
-    if (!await checkTime(t, opens)) return;
-    pushUndo('lunch');
-    for (const wo of r.wos) {
-      const os = opensOfWO(wo);
-      const items = os.map(o => ({ code: o.code, kind: o.kind, item: { id: o.sjId, sj: o.sj, desc: o.sjDesc, section: o.section, type: o.stype } }));
-      os.forEach(o => closeRec(o, t));
-      S.lunch[wo] = { on: true, time: t, items };
-    }
-    await save(); render();
-    UI.toast(`Lunch since ${hmOf(t)} · ${opens.length} worker(s)`, 'ok');
-  }
-}
-
 /* ---------------- stop work ---------------- */
 async function stopAction() {
   const t = actTime();
@@ -1712,38 +1907,219 @@ async function stopAction() {
 }
 
 /* ---------------- end day + summary ---------------- */
-async function endAction() {
-  const t = actTime();
-  const cand = S.myWOs.filter(dayOn);
-  const r = await scopeModal(`${icon('flag')} End day`, `Closes everyone at ${hmOf(t)}.`, cand, 'End day');
+/* ---------------- schedule helpers ---------------- */
+const nowM = () => toMin(S.timeManual || nowHM());
+const todaySched = () => schedFor(S.lists, today());
+function startDefault() { const s = todaySched(), n = nowM(); const st = s ? s.start : (S.lists.schedule || DEFAULT_SCHEDULE).start; return n <= toMin(st) + 10 ? st : toHM(n); }
+function endDefault() { const s = todaySched(), n = nowM(); return s && n >= toMin(s.end) - 10 && n <= toMin(s.end) ? s.end : toHM(n); }
+function lunchStartDefault() { const s = Object.assign({}, DEFAULT_SCHEDULE, S.lists.schedule || {}), n = nowM(); return n >= toMin(s.lunchStart) && n < toMin(s.lunchEnd) ? s.lunchStart : toHM(n); }
+function lunchBackDefault() { const s = Object.assign({}, DEFAULT_SCHEDULE, S.lists.schedule || {}), n = nowM(); return Math.abs(n - toMin(s.lunchEnd)) <= 10 ? s.lunchEnd : toHM(n); }
+const isLeft = code => S.absences.some(a => a.code === code && a.date === today() && !a.cancelled && a.kind === 'LEFT');
+const leftOf = code => S.absences.find(a => a.code === code && a.date === today() && !a.cancelled && a.kind === 'LEFT');
+const outToday = code => isAbsent(code) || isLeft(code);
+const onPLunch = code => !!(S.plunch[code] && S.plunch[code].date === today());
+
+/* people list + scope + time, used by Lunch and End day */
+function pickModal(o) {
+  return new Promise(res => {
+    const cand = o.cand;
+    if (!cand.length) { UI.toast(o.empty || 'Nothing to do in your WO.', 'err'); res(null); return; }
+    const st = { scope: cand.includes(ui.tab) ? 'ONE' : 'ALL', time: o.time, off: new Set() };
+    const wosOf = () => st.scope === 'ONE' ? [ui.tab] : cand;
+    const m = UI.modal('', { wide: true, locked: true });
+    const draw = () => {
+      const groups = wosOf().map(wo => ({ wo, people: o.people ? o.people(wo) : [] }));
+      const n = groups.reduce((s, g) => s + g.people.filter(c => !st.off.has(c)).length, 0);
+      m.innerHTML = `<h3>${o.title}</h3><p class="msub">${o.sub}</p>
+        <div class="mlabel">WHICH WO?</div>
+        <div class="seg">${cand.includes(ui.tab) ? `<button data-s="ONE" class="${st.scope === 'ONE' ? 'sel' : ''}">This WO · ${esc(ui.tab)}</button>` : ''}
+          <button data-s="ALL" class="${st.scope === 'ALL' ? 'sel' : ''}">All my WO (${cand.length})</button></div>
+        ${o.people ? `<div class="mlabel">${o.listLabel} <span class="lite">(untick who ${o.stayVerb})</span></div>
+        <div class="pickppl">${groups.map(g => `<div class="optsec">WO ${esc(g.wo)}</div>${g.people.map(c => `<button class="ck wide ${st.off.has(c) ? '' : 'sel'}" data-c="${esc(c)}"><span class="box">${icon('check')}</span><span class="ckt">${esc(nameOf(c))}<small>${esc(statusOf(c, g.wo).text)}</small></span></button>`).join('') || '<div class="empty">Nobody on the clock.</div>'}`).join('')}</div>` : ''}
+        <div class="field" style="margin-top:12px;max-width:220px"><label>${o.timeLabel}</label><input class="inp" type="time" id="pkT" value="${st.time}"></div>
+        ${o.hint ? `<p class="msub" style="margin:0">${o.hint}</p>` : ''}
+        <div class="mbtns"><button class="btn ghost" data-x="cancel">Cancel</button><button class="btn ${o.danger ? 'red' : 'primary'}" data-x="ok">${o.okLabel}${o.people ? ` (${n})` : ''}</button></div>`;
+    };
+    draw();
+    m.addEventListener('input', e => { if (e.target.id === 'pkT') st.time = e.target.value; });
+    m.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.s) { st.scope = b.dataset.s; draw(); return; }
+      if (b.dataset.c) { st.off.has(b.dataset.c) ? st.off.delete(b.dataset.c) : st.off.add(b.dataset.c); draw(); return; }
+      if (b.dataset.x === 'cancel') { UI.close(); res(null); return; }
+      if (b.dataset.x === 'ok') {
+        if (!/^\d\d:\d\d$/.test(st.time)) { UI.toast('Write the time.', 'err'); return; }
+        const wos = wosOf();
+        const codes = o.people ? wos.flatMap(wo => o.people(wo)).filter(c => !st.off.has(c)) : [];
+        UI.close(); res({ wos, codes, time: st.time, t: `${today()}T${st.time}` });
+      }
+    });
+  });
+}
+function timeModal2(title, sub, time, okLabel) {
+  return new Promise(res => {
+    const m = UI.modal(`<h3>${title}</h3><p class="msub">${sub}</p>
+      <div class="field" style="max-width:220px"><label>Time</label><input class="inp" type="time" id="tm2" value="${time}"></div>
+      <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="yes">${okLabel}</button></div>`, { locked: true });
+    m.addEventListener('click', e => {
+      const b = e.target.closest('[data-x]'); if (!b) return;
+      const v = m.querySelector('#tm2').value;
+      if (b.dataset.x === 'yes' && !/^\d\d:\d\d$/.test(v)) { UI.toast('Write the time.', 'err'); return; }
+      UI.close(); res(b.dataset.x === 'yes' ? v : null);
+    });
+  });
+}
+
+/* ---------------- lunch (group, with who keeps working) ---------------- */
+async function lunchAction() {
+  if (lunchOn(ui.tab)) {
+    const cand = S.myWOs.filter(lunchOn);
+    const r = await pickModal({ title: `${icon('coffee')} Back from lunch`, sub: 'Everyone goes back to the task they had.', cand,
+      time: lunchBackDefault(), timeLabel: 'Back at', okLabel: 'Back from lunch' });
+    if (!r) return;
+    for (const wo of r.wos) if (r.t < S.lunch[wo].time) { await UI.alert('Check the time', `${r.time} is before lunch started (${hmOf(S.lunch[wo].time)}).`); return; }
+    pushUndo('back from lunch');
+    let n = 0;
+    for (const wo of r.wos) {
+      for (const it of S.lunch[wo].items) {
+        if (openOf(it.code) || outToday(it.code)) continue;
+        const s = getSJ(wo, it.item.id);
+        if (it.kind === 'WORK' && (!s || s.status !== 'OPEN')) continue;
+        newRec(it.code, wo, it.item, it.kind, r.t); n++;
+      }
+      S.lunch[wo] = { on: false, time: '', items: [] };
+    }
+    await save(); render();
+    UI.toast(`Back from lunch at ${r.time} · ${n} back to their task`, 'ok');
+    return;
+  }
+  const cand = S.myWOs.filter(wo => dayOn(wo) && !lunchOn(wo) && !stopOn(wo) && opensOfWO(wo).length);
+  const r = await pickModal({ title: `${icon('coffee')} Lunch`, sub: 'Lunch time does not count. Untick who keeps working: he takes his lunch later (tap him › Lunch).',
+    cand, people: wo => opensOfWO(wo).map(o => o.code), listLabel: 'WHO GOES TO LUNCH', stayVerb: 'keeps working',
+    time: lunchStartDefault(), timeLabel: 'Lunch from', okLabel: 'Start lunch', empty: 'Nobody is on the clock.' });
   if (!r) return;
-  const opens = r.wos.flatMap(opensOfWO);
+  const opens = r.codes.map(openOf).filter(Boolean);
+  if (!await checkTime(r.t, opens)) return;
+  pushUndo('lunch');
+  for (const wo of r.wos) {
+    const os = opens.filter(o => o.wo === wo);
+    const items = os.map(o => ({ code: o.code, kind: o.kind, item: { id: o.sjId, sj: o.sj, desc: o.sjDesc, section: o.section, type: o.stype } }));
+    os.forEach(o => closeRec(o, r.t));
+    S.lunch[wo] = { on: true, time: r.t, items };
+    S.lunchDone[wo] = today();
+  }
+  await save(); render();
+  UI.toast(`Lunch from ${r.time} · ${opens.length} worker(s)`, 'ok');
+}
+/* one person goes to lunch at another time */
+async function personLunch() {
+  const wo = ui.tab;
+  const codes = ui.sel.filter(c => { const o = openOf(c); return o && o.wo === wo; });
+  if (!codes.length) { UI.toast('Only people on the clock can go to lunch.', 'err'); return; }
+  const time = await timeModal2(`${icon('coffee')} Lunch · ${esc(codes.map(nameOf).join(', '))}`, 'His clock stops now. Tap him when he is back.', toHM(nowM()), 'Start lunch');
+  if (!time) return;
+  const t = `${today()}T${time}`;
+  const opens = codes.map(openOf);
   if (!await checkTime(t, opens)) return;
-  pushUndo('end day');
-  opens.forEach(o => closeRec(o, t));
-  r.wos.forEach(wo => { S.lunch[wo] = { on: false, time: '', items: [] }; S.stop[wo] = { on: false }; S.ended[wo] = today(); });
-  S.timeManual = '';
+  pushUndo('lunch');
+  opens.forEach(o => {
+    S.plunch[o.code] = { date: today(), wo, time: t, kind: o.kind, item: { id: o.sjId, sj: o.sj, desc: o.sjDesc, section: o.section, type: o.stype } };
+    closeRec(o, t);
+  });
   ui.sel = [];
   await save(); render();
+  UI.toast(`${codes.length} at lunch from ${time}`, 'ok');
+}
+async function personBack(code) {
+  const p = S.plunch[code];
+  const time = await timeModal2(`${icon('coffee')} Back from lunch · ${esc(nameOf(code))}`, `At lunch since ${hmOf(p.time)}. He goes back to ${esc(p.item.sj)} · ${esc(p.item.desc)}.`, toHM(nowM()), 'Back to work');
+  if (!time) return;
+  const t = `${today()}T${time}`;
+  if (t < p.time) { UI.alert('Check the time', `${time} is before his lunch started (${hmOf(p.time)}).`); return; }
+  pushUndo('back from lunch');
+  delete S.plunch[code];
+  if (!openOf(code)) newRec(code, p.wo, p.item, p.kind, t);
+  await save(); render();
+  UI.toast(`${nameOf(code)} back at ${time}`, 'ok');
+}
+
+/* ---------------- leave (goes home early) ---------------- */
+async function leaveAction() {
+  const codes = ui.sel.slice();
+  const time = await timeModal2(`${icon('release')} Leave · ${esc(codes.map(nameOf).join(', '))}`, 'He goes home. His hours stop at this time and he cannot be assigned again today. The report shows LEFT.', toHM(nowM()), 'Leave');
+  if (!time) return;
+  const t = `${today()}T${time}`;
+  const opens = codes.map(openOf).filter(Boolean);
+  if (!await checkTime(t, opens)) return;
+  pushUndo('leave');
+  opens.forEach(o => closeRec(o, t));
+  codes.forEach(code => {
+    delete S.plunch[code];
+    const w = W(code) || { name: code, trade: '' };
+    S.absences.push({ id: uid(), kind: 'LEFT', left: time, date: today(), code, name: w.name, trade: w.trade || '', wo: ui.tab, sup: S.sup, dev: S.dev, late: '', cancelled: false, ts: Date.now() });
+  });
+  ui.sel = [];
+  await save(); render();
+  UI.toast(`${codes.length} left at ${time}`, 'ok');
+}
+async function backFromLeave(code) {
+  const a = leftOf(code);
+  if (!await UI.confirm('Back to work', `${nameOf(code)} left at ${a.left}.\nHe is back and works again today?`, 'Back to work')) return;
+  pushUndo('back to work');
+  a.cancelled = true; a.ts = Date.now();
+  ui.sel = [code];
+  if (isPhone()) ui.pane = 'jobs';
+  await save(); render();
+  UI.toast(`${nameOf(code)} is back. Tap where he goes.`, 'ok');
+}
+
+/* ---------------- end day (with who stays) ---------------- */
+async function endAction() {
+  const cand = S.myWOs.filter(dayOn);
+  const s = todaySched();
+  const r = await pickModal({ title: `${icon('flag')} End day`, sub: s ? `Today the day ends at ${s.end}.` : 'No schedule today: write the real time.',
+    cand, people: wo => opensOfWO(wo).map(o => o.code).concat(Object.keys(S.plunch).filter(c => onPLunch(c) && S.plunch[c].wo === wo)),
+    listLabel: 'WHO FINISHES', stayVerb: 'stays working', time: endDefault(), timeLabel: 'End time',
+    hint: s ? `Up to 10 minutes before ${s.end} it stays ${s.end}. Any other time: write the real time.` : '', okLabel: 'End day' });
+  if (!r) return;
+  const opens = r.codes.map(openOf).filter(Boolean);
+  if (!await checkTime(r.t, opens)) return;
+  pushUndo('end day');
+  opens.forEach(o => closeRec(o, r.t));
+  r.codes.forEach(c => { delete S.plunch[c]; });
+  const ended = [];
+  r.wos.forEach(wo => {
+    const still = opensOfWO(wo).length + Object.keys(S.plunch).filter(c => onPLunch(c) && S.plunch[c].wo === wo).length;
+    if (!still) { S.lunch[wo] = { on: false, time: '', items: [] }; S.stop[wo] = { on: false }; S.ended[wo] = today(); ended.push(wo); }
+  });
+  if (!S.myWOs.some(dayOn)) S.timeManual = '';
+  ui.sel = [];
+  await save(); render();
+  const stay = r.wos.flatMap(opensOfWO).length;
+  if (stay) UI.toast(`${opens.length} finished at ${r.time} · ${stay} still working. Tap End day again when they finish.`, 'ok');
   summaryModal(today(), r.wos);
 }
 function summaryModal(date, wos) {
   const recs = S.records.filter(r => r.date === date && r.sup === S.sup);
   const people = new Map();
   recs.forEach(r => {
-    if (!people.has(r.code)) people.set(r.code, { code: r.code, name: r.name, trade: r.trade, h: 0, wos: new Set(), open: false });
+    if (!people.has(r.code)) people.set(r.code, { code: r.code, name: nameOf(r.code), trade: r.trade, h: 0, wos: new Set(), open: false });
     const p = people.get(r.code); p.h = round2(p.h + recHours(r)); p.wos.add(r.wo); if (!r.end) p.open = true;
   });
-  (wos || S.myWOs).forEach(wo => crewOf(wo).filter(isAvailable).forEach(c => { if (!people.has(c)) { const w = W(c) || {}; people.set(c, { code: c, name: w.name || c, trade: w.trade || '', h: 0, wos: new Set([wo]), open: false }); } }));
-  S.absences.filter(a => a.date === date && a.sup === S.sup && !a.cancelled).forEach(a => { const p = people.get(a.code); if (p) { if (a.late) p.late = a.late; else if (!p.h) p.absent = true; } });
+  (wos || S.myWOs).forEach(wo => crewOf(wo).filter(isAvailable).forEach(c => { if (!people.has(c)) { const w = W(c) || {}; people.set(c, { code: c, name: shortName(w) || c, trade: w.trade || '', h: 0, wos: new Set([wo]), open: false }); } }));
+  S.absences.filter(a => a.date === date && a.sup === S.sup && !a.cancelled).forEach(a => { const p = people.get(a.code); if (p) { if (a.kind === 'LEFT') p.left = a.left; else if (a.late) p.late = a.late; else if (!p.h) p.absent = true; } });
+  const sch = schedFor(S.lists, date);
   const list = Array.from(people.values()).sort((a, b) => cmpStr(a.name, b.name));
   const tot = round2(list.reduce((s, p) => s + p.h, 0));
   const lost = round2(recs.filter(r => r.stype === 'LOST').reduce((s, r) => s + recHours(r), 0));
   const nPend = pending();
   const m = UI.modal(`<h3>${icon('flag')} Day summary · ${fmtDate(date)}</h3>
     <div class="kpis"><div><small>Man-hours</small><b>${fmtH(tot)}</b></div><div><small>Workers</small><b>${list.filter(p => p.h > 0).length}</b></div><div><small>Lost time</small><b class="redt">${fmtH(lost)}</b></div></div>
-    <div class="sumlist">${list.map(p => `<div class="sumrow ${p.absent ? 'absent' : p.h > 8 ? 'ot' : p.h === 0 ? 'zero' : ''}"><span><b>${esc(p.name)}</b><small>${esc(p.trade)} · WO ${esc(Array.from(p.wos).join(', '))}</small></span>
-      <span class="h">${fmtH(p.h)}${p.absent ? '<em>Absent</em>' : p.h > 8 ? '<em>Overtime</em>' : p.h === 0 ? '<em>0 h</em>' : ''}${p.late ? `<em>Late ${p.late}</em>` : ''}${p.open ? '<em>open</em>' : ''}</span></div>`).join('') || '<div class="empty">No records.</div>'}</div>
+    ${sch ? `<p class="msub" style="margin:-4px 0 8px">Schedule today: ${sch.start}–${sch.end} · ${fmtH(sch.hours)} h</p>` : ''}
+    <div class="sumlist">${list.map(p => { const mk = p.absent ? '' : dayMarks(S.lists, date, p.h, p);
+      const cls = p.absent ? 'absent' : /OT/.test(mk) ? 'ot' : p.h === 0 ? 'zero' : /LEFT|(^| )-\d/.test(mk) ? 'under' : '';
+      return `<div class="sumrow ${cls}"><span><b>${esc(p.name)}</b><small>${esc(p.trade)} · WO ${esc(Array.from(p.wos).join(', '))}</small></span>
+      <span class="h">${fmtH(p.h)}${p.absent ? '<em>Absent</em>' : p.h === 0 ? '<em>0 h</em>' : ''}${mk ? mk.split(' · ').map(x => `<em>${esc(x)}</em>`).join('') : ''}${p.open ? '<em>open</em>' : ''}</span></div>`; }).join('') || '<div class="empty">No records.</div>'}</div>
     <div class="mbtns"><button class="btn ghost" data-x="close">Close</button>
       <button class="btn" data-x="report">${icon('report')} Daily report</button>
       <button class="btn primary" data-x="send">${icon('send')} Send to Admin${nPend ? ` <span class="badge">${nPend}</span>` : ''}</button></div>`, { wide: true });
@@ -1840,7 +2216,7 @@ function crewModal(copyFrom) {
         ${copyFrom ? `<button class="btn sm" data-copy="${esc(copyFrom)}">Same crew as WO ${esc(copyFrom)}</button>` : ''}</div>
       <div class="chiprow" style="margin:10px 0"><button class="chip ${!st.f ? 'sel' : ''}" data-f="">All</button>${trades.map(t => `<button class="chip ${st.f === t ? 'sel' : ''}" data-f="${esc(t)}">${esc(t)}</button>`).join('')}</div>
       <div class="checklist tall">${list.map(w => { const other = woOfWorker(w.code); const o = other && other !== wo;
-        return `<button class="ck ${st.set.has(w.code) ? 'sel' : ''}" data-c="${esc(w.code)}"><span class="box">${icon('check')}</span><span class="ckt">${esc(w.name)}<small>${esc(w.trade)}${o ? ` · in WO ${esc(other)}` : ''}</small></span></button>`; }).join('') || '<div class="empty">No match.</div>'}</div>
+        return `<button class="ck ${st.set.has(w.code) ? 'sel' : ''}" data-c="${esc(w.code)}"><span class="box">${icon('check')}</span><span class="ckt">${esc(shortName(w))}<small>${esc(w.trade)}${o ? ` · in WO ${esc(other)}` : ''}</small></span></button>`; }).join('') || '<div class="empty">No match.</div>'}</div>
       <div class="mbtns"><span class="lite" style="margin-right:auto;align-self:center">${st.set.size} in crew</span><button class="btn ghost" data-x="cancel">Cancel</button><button class="btn primary" data-x="ok">Save crew</button></div>`;
   };
   draw();
@@ -1929,6 +2305,31 @@ function sjModal() {
     if (b.dataset.x === 'ok') { S.activeSJ[wo] = Array.from(st.set); UI.close(); await save(); render(); }
   });
 }
+/* tap a sub job card with nobody selected: options for that sub job */
+function sjActions(sj) {
+  const wo = ui.tab, id = sjKey(sj);
+  const on = crewOf(wo).filter(c => { const o = openOf(c); return o && o.wo === wo && o.sjId === id; });
+  const m = UI.modal(`<h3>${icon('layers')} ${esc(sj.sj)} · ${esc(sj.desc)}</h3>
+    <p class="msub">WO ${esc(wo)}${sj.section ? ' · ' + esc(sj.section) : ''}${on.length ? ` · ${on.length} working here now` : ''}</p>
+    <div class="note" style="background:#F7F6FB;border-color:#E3E1EC;color:#4A4570">To move people here: first tap the worker, then this card.</div>
+    <button class="pk wide done" data-x="done"><b>${icon('check')} Mark completed</b><span>The work of this sub job is finished. It leaves your board and the office is told to close it.${on.length ? ` The ${on.length} worker(s) on it become Free.` : ''}</span></button>
+    <div class="mbtns"><button class="btn ghost" data-x="cancel">Cancel</button></div>`, { locked: true });
+  m.addEventListener('click', async e => {
+    const b = e.target.closest('[data-x]'); if (!b) return;
+    if (b.dataset.x === 'cancel') { UI.close(); return; }
+    UI.close();
+    const t = actTime();
+    const opens = on.map(openOf).filter(Boolean);
+    if (!await checkTime(t, opens)) return;
+    if (!await UI.confirm('Mark completed', `${sj.sj} · ${sj.desc}\nCompleted at ${hmOf(t)}?`, 'Mark completed')) return;
+    pushUndo('completed');
+    opens.forEach(o => closeRec(o, t));
+    S.completed.push({ id: uid(), wo, sjId: id, sj: sj.sj, desc: sj.desc, date: today(), time: hmOf(t), sup: S.sup, dev: S.dev, ts: Date.now() });
+    S.activeSJ[wo] = (S.activeSJ[wo] || []).filter(x => x !== id);
+    await save(); render();
+    UI.toast(`${sj.sj} completed. It goes to the office with Send to Admin.`, 'ok');
+  });
+}
 function newSJModal() {
   const wo = ui.tab;
   const secs = Array.from(new Set(workList(wo).map(s => s.section).filter(Boolean)));
@@ -1981,13 +2382,13 @@ async function sendToAdmin() {
   const n = pending();
   if (!n) { UI.toast('Nothing new to send. Admin already has everything.', 'ok'); return; }
   const changed = S.records.filter(r => r.ts > S.lastSend);
-  const dates = Array.from(new Set(changed.map(r => r.date).concat(S.absences.filter(a => a.ts > S.lastSend).map(a => a.date)))).sort();
+  const dates = Array.from(new Set(changed.map(r => r.date).concat(S.absences.filter(a => a.ts > S.lastSend).map(a => a.date)).concat(S.completed.filter(c => c.ts > S.lastSend).map(c => c.date)))).sort();
   if (!dates.length) dates.push(today());
   const recs = S.records.filter(r => dates.includes(r.date));
   const open = recs.filter(r => !r.end).length;
   if (open && !await UI.confirm('Send to Admin', `${open} worker(s) are still on the clock. Their hours go when you send again after End day.\nSend now?`, 'Send now')) return;
   const payload = { type: 'QSL_HH_DAY', version: APP_VERSION, sup: S.sup, dev: S.dev, dates, date: dates[dates.length - 1],
-    sentAt: new Date().toISOString(), records: recs, absences: S.absences.filter(a => dates.includes(a.date)), customSJ: S.customSJ };
+    sentAt: new Date().toISOString(), records: recs, absences: S.absences.filter(a => dates.includes(a.date)), completed: S.completed, customSJ: S.customSJ };
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   const fname = `HH_${today()}_${slug(S.sup || 'SUP')}_${nowHM().replace(':', '')}.qslhh`;
   const stamp = Date.now();
@@ -2124,7 +2525,7 @@ function listChanges(a, b) {
 }
 function changesModal(ch) {
   const per = m => Object.entries(m).map(([wo, n]) => `${n} in WO ${esc(wo)}`).join(' · ');
-  const names = ws => ws.slice(0, 8).map(w => `${esc(w.name)}${w.trade ? ` (${esc(w.trade)})` : ''}`).join(', ') + (ws.length > 8 ? ` +${ws.length - 8} more` : '');
+  const names = ws => ws.slice(0, 8).map(w => `${esc(shortName(w))}${w.trade ? ` (${esc(w.trade)})` : ''}`).join(', ') + (ws.length > 8 ? ` +${ws.length - 8} more` : '');
   const box = [];
   if (ch.newWO.length || Object.keys(ch.newSJ).length) box.push(`<div class="chg g">${ch.newWO.length ? `<b>New WO:</b> ${ch.newWO.map(w => `${esc(w.wo)} · ${esc(w.desc)}`).join(', ')}<br>` : ''}${Object.keys(ch.newSJ).length ? `<b>New sub jobs:</b> ${per(ch.newSJ)}` : ''}</div>`);
   if (ch.closedWO.length || Object.keys(ch.closedSJ).length) box.push(`<div class="chg n">${ch.closedWO.length ? `<b>Closed WO:</b> ${ch.closedWO.map(w => esc(w.wo)).join(', ')}<br>` : ''}${Object.keys(ch.closedSJ).length ? `<b>Closed sub jobs:</b> ${per(ch.closedSJ)}` : ''}</div>`);
@@ -2161,6 +2562,8 @@ function lockScreen(root) {
 
 /* ---------------- selection ---------------- */
 function tapWorker(code) {
+  if (isLeft(code) && !ui.multi) { backFromLeave(code); return; }
+  if (onPLunch(code) && !ui.multi && !ui.sel.length) { personBack(code); return; }
   if (isAbsent(code) && !ui.multi) { if (dayOn(ui.tab)) arrivedLate(code); else UI.toast('Start the day first.', 'err'); return; }
   if (isAbsent(code)) return;
   if (ui.multi) {
@@ -2254,7 +2657,7 @@ function renderView() {
         ${shown.map(w => { const st = statusOf(w.code, wo);
           return `<button class="wk ${selSet.has(w.code) ? 'sel' : ''} ${isAbsent(w.code) ? 'absw' : ''}" data-w="${esc(w.code)}">
             ${ui.multi ? `<span class="cb">${icon('check')}</span>` : `<span class="dot ${st.cls}"></span>`}
-            <span style="min-width:0"><div class="nm">${esc(w.name)}</div><div class="st">${esc(st.text)}</div></span>
+            <span style="min-width:0"><div class="nm">${esc(shortName(w))}</div><div class="st">${esc(st.text)}</div></span>
             <span class="tr">${esc(w.trade)}</span></button>`; }).join('')
           || `<div class="hint">Your crew for WO ${esc(wo)} is empty.<br><button class="btn primary" data-a="crew" style="margin-top:10px">${icon('userplus')} Add my crew</button></div>`}
       </div>
@@ -2263,9 +2666,9 @@ function renderView() {
   const opens = new Map();
   crew.forEach(c => { const o = openOf(c); if (o && o.wo === wo) opens.set(c, o); });
   const chip = (code, o, cls) => `<span class="pp ${cls} ${selSet.has(code) ? 'selp' : ''}" data-p="${esc(code)}"><span>${esc(nameOf(code))}</span>${o ? `<b>${hmOf(o.start)}</b>` : ''}</span>`;
-  const freeList = crew.filter(c => !openOf(c) && !isAbsent(c));
+  const freeList = crew.filter(c => !openOf(c) && !outToday(c));
   const standers = crew.filter(c => opens.has(c) && opens.get(c).kind === 'STANDBY');
-  const act = (S.activeSJ[wo] || []).map(id => getSJ(wo, id)).filter(s => s && s.status === 'OPEN');
+  const act = (S.activeSJ[wo] || []).map(id => getSJ(wo, id)).filter(s => s && s.status === 'OPEN' && !isDone(wo, sjKey(s)));
   // a worker on a SJ that is not on the board still shows
   crew.forEach(c => { const o = opens.get(c); if (o && o.kind === 'WORK' && !act.find(s => sjKey(s) === o.sjId)) { const s = getSJ(wo, o.sjId); if (s && !act.includes(s)) act.push(s); } });
   const order = allSJs(wo);
@@ -2285,14 +2688,14 @@ function renderView() {
       <div class="col-h"><h2>WO ${esc(wo)} <span class="lite">· ${esc(woRec.desc)}</span></h2>
         <button class="btn sm" data-a="sjs">${icon('layers')} Sub jobs</button></div>
       ${ui.sel.length ? `<div class="selbar"><span>${ui.sel.length > 1 ? ui.sel.length + ' selected: ' : ''}${esc(ui.sel.map(nameOf).join(', '))} → tap where they go</span>
-        <button class="btn sm" data-a="move">${icon('swap')} Other WO</button><button class="btn sm ghost" data-a="clearsel" aria-label="Clear selection">${icon('x')}</button></div>` : ''}
+        <button class="btn sm" data-a="move">${icon('swap')} Other WO</button>${on && !lunchOn(wo) ? `<button class="btn sm" data-a="plunch">${icon('coffee')} Lunch</button>` : ''}${on ? `<button class="btn sm" data-a="leave">${icon('release')} Leave</button>` : ''}<button class="btn sm ghost" data-a="clearsel" aria-label="Clear selection">${icon('x')}</button></div>` : ''}
       <div class="scroll">
         ${!on ? `<div class="hint">${S.ended[wo] === today() ? 'Day ended for this WO.' : 'Day not started for this WO.'}<br><button class="btn primary" data-a="start" style="margin-top:10px">${icon('play')} Start day · WO ${esc(wo)}</button></div>` : ''}
         ${stopOn(wo) ? `<div class="banner stop">${icon('stop')} WORK STOPPED · ${esc(shortDesc(S.stop[wo].item.desc))} since ${hmOf(S.stop[wo].time)}</div>` : ''}
         ${lunchOn(wo) ? `<div class="banner lunch">${icon('coffee')} LUNCH since ${hmOf(S.lunch[wo].time)}</div>` : ''}
         <div class="sjg">
           <button class="sj free" data-t="FREE"><div class="h"><span>FREE</span><span class="count">${freeList.length || ''}</span></div><div class="d">Not counting</div>
-            <div class="people">${freeList.map(c => chip(c, null, lunchOn(wo) && S.lunch[wo].items.some(i => i.code === c) ? 'lunch' : 'free')).join('')}</div></button>
+            <div class="people">${freeList.map(c => chip(c, null, onPLunch(c) || (lunchOn(wo) && S.lunch[wo].items.some(i => i.code === c)) ? 'lunch' : 'free')).join('')}</div></button>
           <button class="sj stand ${ui.sel.length ? 'target' : ''}" data-t="STANDBY"><div class="h"><span>STAND BY</span><span class="count">${standers.length || ''}</span></div><div class="d">Time lost · safety</div>
             <div class="people">${standers.map(c => chip(c, opens.get(c), opens.get(c).stype === 'SAFETY' ? 'safe' : 'stand')).join('')}</div></button>
         </div>
@@ -2314,13 +2717,25 @@ function renderView() {
       <button class="mi" data-a="closetab">${icon('x')}<span>Remove tab WO ${esc(wo)}</span></button>
       <div class="foot-ep" style="justify-content:center;margin-top:16px">Powered by <img src="${LOGO_EP}" alt="EP"></div></div></div>`;
 
-  root.innerHTML = `<div class="app show-${ui.pane}">${top}${tabs}${actions}
+  root.innerHTML = `<div class="app show-${ui.pane}">${top}${tabs}${strips(nPend)}${actions}
     <div class="main">${left}${right}${more}</div>
     ${footer(nPend, status)}
     <nav class="bnav"><button data-pane="crew" class="${ui.pane === 'crew' ? 'sel' : ''}">${icon('users')}<span>Crew</span></button>
       <button data-pane="jobs" class="${ui.pane === 'jobs' ? 'sel' : ''}">${icon('layers')}<span>Sub jobs</span>${ui.sel.length ? `<span class="badge">${ui.sel.length}</span>` : ''}</button>
       <button data-pane="more" class="${ui.pane === 'more' ? 'sel' : ''}">${icon('menu')}<span>More</span>${nPend ? '<span class="badge dot"></span>' : ''}</button></nav>
   </div>`;
+}
+/* reminders under the tabs: lunch time, and day ended without sending */
+function strips(nPend) {
+  const out = [];
+  const wo = ui.tab;
+  const sc = Object.assign({}, DEFAULT_SCHEDULE, S.lists.schedule || {});
+  const n = nowM();
+  if (wo && dayOn(wo) && !lunchOn(wo) && !stopOn(wo) && S.lunchDone[wo] !== today() && opensOfWO(wo).length && n >= toMin(sc.lunchStart) && n < toMin(sc.lunchEnd) + 30)
+    out.push(`<button class="strip lunchs" data-a="lunch">${icon('coffee')}<span>Lunch time ${sc.lunchStart}–${sc.lunchEnd} · tap to start lunch</span></button>`);
+  if (nPend && S.myWOs.some(x => S.ended[x] === today()))
+    out.push(`<button class="strip sends" data-a="send">${icon('send')}<span>Day ended · send it to the office now</span><b>${nPend}</b></button>`);
+  return out.length ? `<div class="strips">${out.join('')}</div>` : '';
 }
 function footer(nPend, status) {
   return `<div class="foot">
@@ -2350,7 +2765,7 @@ function onClick(e) {
   if (b.dataset.t) {
     if (b.dataset.t === 'FREE') assign({ type: 'FREE' });
     else if (b.dataset.t === 'STANDBY') standbyModal();
-    else { const s = getSJ(ui.tab, b.dataset.sj); if (s) assign({ type: 'SJ', item: itemOf(s) }); }
+    else { const s = getSJ(ui.tab, b.dataset.sj); if (!s) return; if (!ui.sel.length) sjActions(s); else assign({ type: 'SJ', item: itemOf(s) }); }
     return;
   }
   switch (b.dataset.a) {
@@ -2362,6 +2777,8 @@ function onClick(e) {
     case 'multi': ui.multi = !ui.multi; if (!ui.multi && ui.sel.length > 1) ui.sel = []; render(); break;
     case 'clearsel': ui.sel = []; render(); break;
     case 'move': moveToWO(); break;
+    case 'plunch': personLunch(); break;
+    case 'leave': leaveAction(); break;
     case 'crew': crewModal(S.myWOs.find(x => x !== ui.tab && crewOf(x).length)); break;
     case 'sjs': sjModal(); break;
     case 'addwo': addWOModal(); break;
