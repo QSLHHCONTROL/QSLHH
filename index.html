@@ -408,6 +408,38 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgsm{display:flex;align-items:center;gap:10px;background:#F7F6FB;border-radius:14px;padding:10px 12px}
 .pgsm div{flex:1;display:flex;flex-direction:column}.pgsm span{font-size:12px;color:var(--muted)}
 .pgapp:has(.pgsheet.on) .pgmain{padding-bottom:240px}
+/* ---------- v2.4.2: day log, rolls, clear map mode ---------- */
+.pgmfab{width:60px;height:54px;border-radius:16px;background:#fff;border:1.5px solid #C9C6DB;color:var(--q);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-weight:800;font-size:11px;box-shadow:0 3px 10px rgba(28,11,91,.15);padding:0}
+.pgmfab svg{width:20px;height:20px}
+.pgmfab.on{background:var(--q);color:#fff;border-color:var(--q)}
+.pgmode{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:5;background:var(--q);color:#fff;border-radius:12px;padding:5px 12px;font-size:12px;font-weight:800;white-space:nowrap;pointer-events:none;max-width:60%;overflow:hidden;text-overflow:ellipsis}
+.pgpj.sm{min-height:34px;font-size:12px;padding:0 10px}
+.pgpj.warn{border-color:#FF6A00;color:#C24E00;background:#FFF1E6}
+.pgmtop .pgpj.sm{background:#fff}
+.pgdlh{display:flex;align-items:center;gap:10px}.pgdlh h3{flex:1;margin:0}
+.pgsw{flex:none;width:52px;height:30px;border-radius:15px;border:none;background:#C9C6DB;position:relative;padding:0}
+.pgsw i{position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:12px;background:#fff;transition:left .15s}
+.pgsw.on{background:#2E9D5B}.pgsw.on i{left:25px}
+.pgstps{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.pgstp{display:flex;align-items:center;gap:8px;background:#F7F6FB;border-radius:16px;padding:8px 10px}
+.pgstp .lb{flex:1;min-width:0;display:flex;flex-direction:column}.pgstp .lb b{font-size:16px}.pgstp .lb span{font-size:12px;color:var(--muted)}
+.pgstp .b{width:46px;height:46px;border-radius:14px;background:#fff;border:1.5px solid #C9C6DB;font-size:24px;font-weight:800;color:var(--q);flex:none;padding:0}
+.pgstp .v{width:58px;text-align:center;font-size:24px;font-weight:800;border:none;background:transparent;color:var(--q);padding:0}
+.pgseg2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+.pgseg2 button{min-height:44px;border-radius:14px;border:1.5px solid #C9C6DB;background:#fff;font-weight:800;color:var(--q)}
+.pgseg2 button.on{background:var(--q);color:#fff;border-color:var(--q)}
+.pglbl{font-size:12px;font-weight:800;color:var(--muted);margin:12px 0 4px}
+.pgrl{display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;border-top:1px solid var(--line)}.pgrl span{flex:1}.pgrl small{color:var(--muted)}
+@media (max-width:700px){.pgmtop .pgmt span{display:none}}
+@media (orientation:landscape) and (max-height:560px){.pgmapmode .pgmfab{width:56px;height:48px}.pgmapmode .pgfabs.l{gap:6px}}
+
+.pgdll{padding:4px 10px 0}
+.pgdll button{width:100%;display:flex;align-items:center;gap:6px;min-height:38px;border-radius:12px;border:1.5px solid var(--line);background:#fff;color:var(--q);font-size:13px;padding:0 12px;text-align:left}
+.pgdll button span{margin-left:auto;font-weight:800;font-size:12px;color:var(--muted)}
+.pgdll button.warn{border-color:#FF6A00;background:#FFF1E6;color:#C24E00}
+.pgdll.off button{width:auto;min-height:30px;font-size:12px;color:var(--muted);border-style:dashed}
+@media (orientation:landscape) and (max-height:560px){.modal{padding:14px 16px}.pgstps{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}.modal h3{margin-top:0}}
+.pgstp .lb b{white-space:nowrap}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -826,7 +858,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.4.1';
+const APP_VERSION = '2.4.2';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -3044,6 +3076,9 @@ const PG_PEND = '#E3E1EC', PG_SEL = '#FF6A00';
 async function pgLoad() {
   try { PG.S = Object.assign({ lists: null, marks: [], at: '' }, (await Store.get('progress')) || {}); }
   catch (e) { PG.S = { lists: null, marks: [], at: '' }; }
+  if (!PG.S.days) PG.S.days = [];      /* day log: fitters, welders, hours */
+  if (!PG.S.rolls) PG.S.rolls = [];    /* dome rolls received / returned */
+  if (!PG.S.dl) PG.S.dl = {};          /* day log on/off set on this phone (by project) */
 }
 async function pgSave() { PG.cache = null; const ok = await Store.set('progress', PG.S); if (!ok) UI.toast('Could not save on this device.', 'err'); }
 const pgProjects = () => (PG.S && PG.S.lists ? PG.S.lists.projects : []) || [];
@@ -3052,7 +3087,10 @@ const pgCur = () => pgProj(PG.ui.pid);
 const pgRep = p => p.type === 'REPAIR';
 const pgDome = p => p.type === 'DOME';
 const pgIsMap = p => pgRep(p) || pgDome(p);
-const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length : 0;
+const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length + (PG.S.days || []).filter(d => !d.sent).length + (PG.S.rolls || []).filter(r => !r.sent).length : 0;
+/* day log on: what this phone chose, or what the office set in the lists */
+const pgDlOn = p => (PG.S.dl && p.id in PG.S.dl) ? !!PG.S.dl[p.id] : !!p.dl;
+const pgDay = (p, d) => (PG.S.days || []).filter(x => x.pid === p.id && x.date === d).sort((a, b) => String(a.at).localeCompare(String(b.at))).pop();
 const pgLabel = (p, s) => (pgRep(p) ? PG_STG[s].r : PG_STG[s].p);
 const pgF1 = x => (Math.round((x + Number.EPSILON) * 10) / 10).toFixed(1);
 const pgPct = (a, b) => b > 0 ? Math.round(a / b * 1000) / 10 : 0;
@@ -3147,10 +3185,13 @@ async function pgImport() {
 function pgSendSummary(nHH) {
   return new Promise(res => {
     const un = PG.S.marks.filter(m => !m.sent);
-    const rows = pgProjects().map(p => { const mk = un.filter(m => m.pid === p.id); if (!mk.length) return '';
+    const rows = pgProjects().map(p => { const mk = un.filter(m => m.pid === p.id);
+      const dy = (PG.S.days || []).filter(d => !d.sent && d.pid === p.id), rl = (PG.S.rolls || []).filter(r => !r.sent && r.pid === p.id);
+      if (!mk.length && !dy.length && !rl.length) return '';
       const c = {}; mk.forEach(m => { const k = m.act === 'CLR' ? 'Back to pending' : pgLabel(p, m.stage); c[k] = (c[k] || 0) + 1; });
+      if (dy.length) c['Day log'] = dy.length; if (rl.length) c['Rolls'] = rl.length;
       return `<div class="pgsm"><div><b>${pgDome(p) ? 'Dome' : pgRep(p) ? 'Tank' : 'Piping'} · ${esc(p.name)}</b><span>${Object.keys(c).map(esc).join(' · ')}</span></div><b>${Object.values(c).join(' · ')}</b></div>`; }).join('');
-    const tot = un.length + (nHH || 0);
+    const tot = pgPending() + (nHH || 0);
     const m = UI.modal(`<h3>${icon('send')} Send to Admin</h3><p class="msub">What you send · ${fmtDate(todayStr())}</p>
       <div class="pgsml">${rows}${nHH ? `<div class="pgsm"><div><b>Man-hours</b><span>Crew records</span></div><b>${nHH}</b></div>` : ''}</div>
       <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="ok">${icon('send')} Send (${tot})</button></div>`, { locked: true });
@@ -3158,8 +3199,12 @@ function pgSendSummary(nHH) {
     m.querySelector('[data-x=ok]').onclick = () => { UI.close(); res(true); };
   });
 }
-function pgPayload() { return { type: 'QSL_PROGRESS_DAY', v: 1, sup: S.sup || '', dev: S.dev, at: new Date().toISOString(), marks: PG.S.marks.filter(m => !m.sent).map(m => { const x = Object.assign({}, m); delete x.sent; delete x.batch; return x; }) }; }
-async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); await pgSave(); }
+function pgPayload() {
+  const strip = x => { const y = Object.assign({}, x); delete y.sent; delete y.batch; return y; };
+  return { type: 'QSL_PROGRESS_DAY', v: 2, sup: S.sup || '', dev: S.dev, at: new Date().toISOString(), marks: PG.S.marks.filter(m => !m.sent).map(strip),
+    days: (PG.S.days || []).filter(d => !d.sent).map(strip), rolls: (PG.S.rolls || []).filter(r => !r.sent).map(strip) };
+}
+async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); (PG.S.days || []).forEach(d => { d.sent = true; }); (PG.S.rolls || []).forEach(r => { r.sent = true; }); await pgSave(); }
 async function pgSendOnly() {
   const n = pgPending();
   if (!n) { UI.toast('No progress to send.', 'ok'); return; }
@@ -3186,7 +3231,7 @@ function pgHeadline(p) {
   const f = J.filter(i => pgM(p, i).FIT).reduce((a, i) => a + i.nd, 0), w = J.filter(i => pgM(p, i).WEL).reduce((a, i) => a + i.nd, 0);
   return { pct: t ? Math.round((0.4 * f + 0.6 * w) / t * 1000) / 10 : 0, txt: `welded ${pgF1(w)} / ${pgF1(t)} in-dia`, col: PG_STG.WEL.color };
 }
-const pgUnsent = p => PG.S.marks.filter(m => !m.sent && m.pid === p.id).length;
+const pgUnsent = p => PG.S.marks.filter(m => !m.sent && m.pid === p.id).length + (PG.S.days || []).filter(d => !d.sent && d.pid === p.id).length + (PG.S.rolls || []).filter(r => !r.sent && r.pid === p.id).length;
 const pgKind = p => pgDome(p) ? 'DOME ROOF' : pgRep(p) ? 'TANK REPAIR' : 'PIPING';
 const pgWo = p => { const w = String(p.wo || '').trim().replace(/^W\.?O\.?[\s#:.-]*/i, '').trim(); return w ? 'WO ' + w : ''; };
 function pgFoot() {
@@ -3227,9 +3272,10 @@ function pgRender(root) {
   if (pgIsMap(p)) {     /* map: whole screen, best with the phone turned */
     root.innerHTML = `<div class="app pgapp pgmapmode">
       <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgprojects">⇆ Projects</button>
-        <div class="pgmt"><b>${pgDome(p) ? 'Dome' : 'Tank'} · ${esc(p.name)}</b><span>${h.pct.toFixed(1)}% · ${esc(h.txt)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
+        <div class="pgmt"><b>${pgDome(p) ? 'Dome' : 'Tank'} · ${esc(p.name)}</b><span>${h.pct.toFixed(1)}% · ${esc(h.txt)}</span></div>${pgDlChips(p)}${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
       <div class="pgstage"><div class="pgmap" id="pgmapbox">${pgMapSvg(p)}</div>
-        <div class="pgfabs l"><button class="pgfab ${PG.ui.mode === 'tap' ? 'on' : ''}" data-pgm="tap" aria-label="Tap select">☝</button><button class="pgfab ${PG.ui.mode === 'box' ? 'on' : ''}" data-pgm="box" aria-label="Box select">⬚</button><button class="pgfab ${PG.ui.mode === 'pan' ? 'on' : ''}" data-pgm="pan" aria-label="Move">✥</button></div>
+        <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
+        <div class="pgmode" id="pgmode">${PG_MODE[PG.ui.mode] || ''}</div>
         <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button><button class="pgfab" data-a="pgfind" aria-label="Find">${icon('search')}</button><button class="pgfab ${PG.ui.leg ? 'on' : ''}" data-a="pgleg" aria-label="Legend">?</button></div>
         ${PG.ui.leg ? `<div class="pglegend pgpop">${pgLegend(p)}</div>` : ''}
         <button class="pgsendfab" data-a="send">${icon('send')} Send${pgPending() + pending() ? ` <span class="badge">${pgPending() + pending()}</span>` : ''}</button>
@@ -3240,7 +3286,27 @@ function pgRender(root) {
   }
   root.innerHTML = `<div class="app pgapp">${pgTop()}
     <div class="pghead"><button class="pgpj lt" data-a="pgprojects">⇆ Projects</button><div class="pgmt"><b>${esc(p.name)}</b><span>Piping${pgWo(p) ? ' · ' + esc(pgWo(p)) : ''} · ${h.pct.toFixed(1)}%</span></div>${pgDateChip()}</div>
+    ${pgDlLine(p)}
     <div class="pgmain">${pgPiping(p)}</div>${pgFoot()}${pgBar(p)}</div>`;
+}
+/* mode of the map: always written on top so the supervisor knows what a touch does */
+const PG_ICON = {
+  tap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11V5a2 2 0 0 1 4 0v6"/><path d="M13 10a2 2 0 0 1 4 0v4a6 6 0 0 1-6 6h-1a5 5 0 0 1-4-2l-3-4a2 2 0 0 1 3-2l1 1"/></svg>',
+  box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="3 3" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>',
+  pan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>'
+};
+const PG_MODE = { tap: 'Mode: Tap · touch a strip or node', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the map' };
+/* day log / rolls buttons: small, only what applies */
+function pgDlChips(p) {
+  if (!pgDlOn(p)) return `<button class="pgpj sm" data-a="pgdl" aria-label="Day log">📋</button>`;
+  const d = pgDay(p, PG.ui.date || todayStr());
+  return `<button class="pgpj sm ${d ? '' : 'warn'}" data-a="pgdl">📋 ${d ? `${d.fit}F · ${d.wel}W` : 'Day log'}</button>${pgDome(p) ? '<button class="pgpj sm" data-a="pgrolls">🧻 Rolls</button>' : ''}`;
+}
+/* piping: one thin line under the name (only the icon when the day log is off) */
+function pgDlLine(p) {
+  if (!pgDlOn(p)) return `<div class="pgdll off"><button data-a="pgdl">📋 Day log off</button></div>`;
+  const d = pgDay(p, PG.ui.date || todayStr());
+  return `<div class="pgdll"><button data-a="pgdl" class="${d ? '' : 'warn'}">📋 ${d ? `Today: <b>${d.fit} fitters · ${d.wel} welders · ${d.h} h</b>` : '<b>Day log: write the crew of today</b>'}<span>Edit</span></button></div>`;
 }
 function pgLegend(p) {
   if (pgDome(p)) return `<span><i style="background:${PG_DPEND}"></i>Strip</span><span><i style="background:${PG_STG.PLS.color}"></i>Strip placed</span><span><i style="background:#fff;border:2px solid #8C86B8;border-radius:50%"></i>Node</span><span><i style="background:${PG_STG.PLN.color};border-radius:50%"></i>Node placed</span><span><i style="background:${PG_DREF}"></i>Reference</span><span><i style="background:${PG_SEL}"></i>Selected</span>`;
@@ -3317,6 +3383,26 @@ function pgZoom(p, f) {
   const w = Math.min(full[2], Math.max(full[2] / 40, vb[2] * f)), k = w / vb[2];
   PG.ui.vb[p.id] = [cx - (cx - vb[0]) * k, cy - (cy - vb[1]) * k, w, vb[3] * k]; pgRedraw(p);
 }
+/* what the finger touched: the closest node or strip (or piece) within the size of a fingertip */
+function pgPick(p, svg, cx, cy, target) {
+  const m = svg.getScreenCTM(); if (!m) return '';
+  const q = new DOMPoint(cx, cy).matrixTransform(m.inverse()), k = Math.hypot(m.a, m.b) || 1;   /* screen px per map unit */
+  const tol = 26 / k, x = q.x, y = -q.y;
+  const dSeg = (a, b) => { const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy; let t = L2 ? ((x - a[0]) * vx + (y - a[1]) * vy) / L2 : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(x - a[0] - t * vx, y - a[1] - t * vy); };
+  if (pgDome(p)) {
+    let nb = '', nd = Infinity, sb = '', sd = Infinity;
+    p.items.forEach(it => { if (it.kind === 'NODE') { const d = Math.hypot(it.pts[0][0] - x, it.pts[0][1] - y); if (d < nd) { nd = d; nb = it.id; } }
+      else if (it.kind === 'STRIP') { const d = dSeg(it.pts[0], it.pts[1]); if (d < sd) { sd = d; sb = it.id; } } });
+    /* the node only when the finger is really on it (closer than the strip, within ~12 px); otherwise the closest strip */
+    if (nd * k <= 12 && nd <= sd + 3 / k) return nb;
+    return sd <= tol ? sb : (nd <= tol ? nb : '');
+  }
+  const el = target && target.closest && target.closest('[data-pc]');
+  if (el) return el.dataset.pc;
+  let best = '', bd = Infinity;
+  p.items.forEach(it => { if (!it.pts) return; for (let i = 0; i < it.pts.length; i++) { const d = dSeg(it.pts[i], it.pts[(i + 1) % it.pts.length]); if (d < bd) { bd = d; best = it.id; } } });
+  return bd <= tol * 0.6 ? best : '';
+}
 function pgWireMap() {
   const svg = document.getElementById('pgmap'); if (!svg) return;
   const p = pgCur(); if (!p) return;
@@ -3348,7 +3434,7 @@ function pgWireMap() {
       setVB([pinch.c[0] - (pinch.c[0] - pinch.vb[0]) * k, pinch.c[1] - (pinch.c[1] - pinch.vb[1]) * k, w, pinch.vb[3] * k]); return;
     }
     if (!st) return;
-    if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > 8) st.moved = true;
+    if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > (e.pointerType === 'mouse' ? 6 : 14)) st.moved = true;   /* a finger trembles a little: still a tap */
     if (!st.moved) return;
     if (PG.ui.mode === 'box') {
       const q = pt(e.clientX, e.clientY);
@@ -3363,7 +3449,7 @@ function pgWireMap() {
     ptrs.delete(e.pointerId);
     if (pinch) { if (ptrs.size < 2) { pinch = null; later(); } return; }
     if (!st) return; const s = st; st = null;
-    if (!s.moved) { const el = s.target.closest && s.target.closest('[data-pc]'); if (el && PG.ui.mode !== 'pan') { const id = el.dataset.pc; if (PG.ui.sel.has(id)) PG.ui.sel.delete(id); else PG.ui.sel.add(id); pgRefresh(); } return; }
+    if (!s.moved) { if (PG.ui.mode !== 'pan') { const id = pgPick(p, svg, s.x, s.y, s.target); if (id) { if (PG.ui.sel.has(id)) PG.ui.sel.delete(id); else PG.ui.sel.add(id); pgRefresh(); } } return; }
     if (PG.ui.mode === 'box' && rect) {
       const q = pt(e.clientX, e.clientY), x0 = Math.min(q[0], s.q[0]), x1 = Math.max(q[0], s.q[0]), y0 = Math.min(q[1], s.q[1]), y1 = Math.max(q[1], s.q[1]);
       rect.remove(); rect = null;
@@ -3427,7 +3513,7 @@ async function pgClick(e) {
   if (d.pgt) { PG.ui.tab = d.pgt; PG.ui.sel = new Set(); PG.ui.stf = 'ALL'; PG.ui.spool = 'ALL'; render(); return; }
   if (d.pgjm) { PG.ui.jm = d.pgjm; PG.ui.sel = new Set(); render(); return; }
   if (d.pgr) { if (PG.ui.sel.has(d.pgr)) PG.ui.sel.delete(d.pgr); else PG.ui.sel.add(d.pgr); pgRefresh(); return; }
-  if (d.pgm) { PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => x.classList.toggle('sel', x === b)); return; }
+  if (d.pgm) { PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = PG_MODE[d.pgm] || ''; return; }
   if (d.pgmark) {
     const date = PG.ui.date || todayStr();
     if (date > todayStr()) { UI.toast('The date cannot be in the future.', 'err'); return; }
@@ -3444,6 +3530,8 @@ async function pgClick(e) {
     case 'pgvert': PG.ui.vert = true; render(); break;
     case 'pgdone': PG.ui.done = !PG.ui.done; render(); break;
     case 'pgfind': pgFindModal(p); break;
+    case 'pgdl': pgDayModal(p); break;
+    case 'pgrolls': pgRollsModal(p); break;
     case 'pgimport': pgImport(); break;
     case 'pgundo': pgUndo(); break;
     case 'send': sendToAdmin(); break;
@@ -3480,6 +3568,61 @@ function pgChange(e) {
   else if (t.id === 'pgDate') { PG.ui.date = t.value > todayStr() ? todayStr() : (t.value || todayStr()); render(); }
   else if (t.id === 'pgCrew') { PG.ui.crew = t.value; }
   else if (t.id === 'pgQ') { PG.ui.q = t.value; render(); }
+}
+/* ---------------- day log: fitters, welders, hours of the day (one per day; the last one counts) ---------------- */
+function pgStepper(id, label, sub, v, max, step = 1) {
+  return `<div class="pgstp"><div class="lb"><b>${label}</b><span>${sub}</span></div><button class="b" data-st="${id}" data-d="-${step}" aria-label="Less">−</button><input class="v" id="${id}" inputmode="decimal" value="${v}" data-max="${max}"><button class="b" data-st="${id}" data-d="${step}" aria-label="More">+</button></div>`;
+}
+function pgWireSteppers(m) {
+  m.addEventListener('click', e => { const b = e.target.closest('[data-st]'); if (!b) return; const i = m.querySelector('#' + b.dataset.st);
+    const v = Math.max(0, Math.min(Number(i.dataset.max), (Number(i.value) || 0) + Number(b.dataset.d))); i.value = String(Math.round(v * 2) / 2); i.dispatchEvent(new Event('input', { bubbles: true })); });
+}
+function pgDayModal(p) {
+  const date = PG.ui.date || todayStr(), on = pgDlOn(p), d = pgDay(p, date) || {};
+  const hh = () => { const f = Number(m.querySelector('#dlF').value) || 0, w = Number(m.querySelector('#dlW').value) || 0, h = Number(m.querySelector('#dlH').value) || 0; return `Man-hours: <b>${Math.round((f + w) * h * 10) / 10} h</b> (${f + w} people × ${h} h)`; };
+  const m = UI.modal(`<div class="pgdlh"><h3>📋 Day log · ${esc(p.name)}</h3><button class="pgsw ${on ? 'on' : ''}" id="dlOn" aria-label="Day log on or off"><i></i></button></div>
+    <p class="msub">${on ? `${fmtDate(date)} · one record per day, you can correct it` : 'Off: only progress is marked. Turn it on to write the crew of each day' + (pgDome(p) ? ' and the rolls.' : '.')}</p>
+    ${on ? `<div class="pgstps">${pgStepper('dlF', 'Fitters', 'people today', d.fit ?? 0, 200)}${pgStepper('dlW', 'Welders', '0 if not needed', d.wel ?? 0, 200)}${pgStepper('dlH', 'Hours', 'of the day', d.h ?? (DAY_H[parseLocal(date).getDay()] || 10), 24, 0.5)}</div>
+      <p class="msub" id="dlHH" style="margin-top:8px"></p>` : ''}
+    <div class="mbtns"><button class="btn ghost" data-x="no">${on ? 'Cancel' : 'Close'}</button>${on ? '<button class="btn primary" data-x="ok">Save</button>' : ''}</div>`);
+  pgWireSteppers(m);
+  const upd = () => { const e = m.querySelector('#dlHH'); if (e) e.innerHTML = hh(); }; upd(); m.addEventListener('input', upd);
+  m.querySelector('#dlOn').onclick = async () => { PG.S.dl[p.id] = !on; await pgSave(); UI.close(); render(); pgDayModal(p); };
+  m.querySelector('[data-x=no]').onclick = () => UI.close();
+  const ok = m.querySelector('[data-x=ok]');
+  if (ok) ok.onclick = async () => {
+    const f = Number(m.querySelector('#dlF').value), w = Number(m.querySelector('#dlW').value), h = Number(m.querySelector('#dlH').value);
+    if (![f, w, h].every(x => isFinite(x) && x >= 0) || h > 24 || f !== Math.round(f) || w !== Math.round(w)) { UI.toast('Check the numbers (people: whole numbers, hours 0 to 24).', 'err'); return; }
+    PG.S.days = PG.S.days.filter(x => !(x.pid === p.id && x.date === date && !x.sent));      /* the last one of the day stays */
+    PG.S.days.push({ uid: uid(), pid: p.id, date, fit: f, wel: w, h, by: S.sup || '', at: new Date().toISOString(), sent: false });
+    await pgSave(); UI.close(); render(); UI.toast(`Day log saved: ${f} fitters · ${w} welders · ${h} h.`, 'ok');
+  };
+}
+const DAY_H = [0, 10, 10, 10, 10, 8, 9];
+/* ---------------- dome rolls: received / returned (rolls of 33 ft) ---------------- */
+function pgRollsModal(p) {
+  let type = 'REC';
+  const list = () => (PG.S.rolls || []).filter(r => r.pid === p.id).sort((a, b) => cmpStr(a.date, b.date)).map(r => `<div class="pgrl"><span>${fmtDate(r.date).slice(0, 6)} · ${r.type === 'RET' ? 'Returned' : 'Received'} · 12": ${r.r12} · 24": ${r.r24}${r.note ? ' · ' + esc(r.note) : ''}</span>${r.sent ? '<small>sent</small>' : `<button class="btn sm ghost" data-rdel="${r.uid}" aria-label="Delete">✕</button>`}</div>`).join('') || '<div class="pgrl"><span>Nothing written yet on this phone.</span></div>';
+  const m = UI.modal(`<h3>🧻 Rolls · ${esc(p.name)}</h3><p class="msub">Rolls of 33 ft · ${fmtDate(PG.ui.date || todayStr())}</p>
+    <div class="pgseg2"><button class="on" data-rt="REC">Received</button><button data-rt="RET">Returned</button></div>
+    <div class="pgstps">${pgStepper('rl12', 'Rolls 12"', '', 0, 999)}${pgStepper('rl24', 'Rolls 24"', '', 0, 999)}</div>
+    <input class="inp" id="rlN" placeholder="Note (e.g. Boxes 4-5)" style="margin-top:8px;font-size:16px">
+    <div class="mbtns"><button class="btn ghost" data-x="no">Close</button><button class="btn primary" data-x="ok">Save</button></div>
+    <div class="pglbl">ON THIS PHONE</div><div id="rlList">${list()}</div>`);
+  pgWireSteppers(m);
+  m.addEventListener('click', async e => {
+    const t = e.target.closest('[data-rt]'); if (t) { type = t.dataset.rt; m.querySelectorAll('[data-rt]').forEach(x => x.classList.toggle('on', x === t)); return; }
+    const del = e.target.closest('[data-rdel]'); if (del) { PG.S.rolls = PG.S.rolls.filter(r => r.uid !== del.dataset.rdel); await pgSave(); m.querySelector('#rlList').innerHTML = list(); render(); return; }
+  });
+  m.querySelector('[data-x=no]').onclick = () => UI.close();
+  m.querySelector('[data-x=ok]').onclick = async () => {
+    const a = Number(m.querySelector('#rl12').value), b = Number(m.querySelector('#rl24').value);
+    if (![a, b].every(x => isFinite(x) && x >= 0 && x === Math.round(x))) { UI.toast('Rolls: whole numbers.', 'err'); return; }
+    if (!a && !b) { UI.toast('Write how many rolls.', 'err'); return; }
+    PG.S.rolls.push({ uid: uid(), pid: p.id, date: PG.ui.date || todayStr(), type, r12: a, r24: b, note: m.querySelector('#rlN').value.trim(), by: S.sup || '', at: new Date().toISOString(), sent: false });
+    await pgSave(); m.querySelector('#rl12').value = '0'; m.querySelector('#rl24').value = '0'; m.querySelector('#rlN').value = ''; m.querySelector('#rlList').innerHTML = list(); render();
+    UI.toast(`${type === 'RET' ? 'Returned' : 'Received'}: 12" ${a} · 24" ${b}.`, 'ok');
+  };
 }
 /* find a strip / piece on the map: zoom to it and select it */
 function pgFindModal(p) {
