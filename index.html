@@ -281,6 +281,51 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 @media (max-width:760px){.strips{padding:8px 10px 0}.selbar span{flex:1 1 100%}.selbar .btn{flex:1}}
 .sumrow.under{background:#FFF4D6}.sumrow.under em{background:#FFE7A8;color:var(--ambertx)}
 .sumrow .h{flex-wrap:wrap;justify-content:flex-end}
+
+/* ---------- Progress module in the supervisor app ---------- */
+.pgapp{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.pgh{display:flex;align-items:center;gap:8px;padding:8px 10px 0}
+.pgchips{display:flex;gap:6px;overflow-x:auto;flex:1;padding-bottom:2px}
+.pgchips .chip{flex:none;min-height:44px}
+.pgmain{flex:1;min-height:0;overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:8px;-webkit-overflow-scrolling:touch}
+.pgtools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pgtools select.inp{width:auto;min-width:120px;min-height:44px;font-size:15px}
+.pgsearch{display:flex;align-items:center;gap:6px;background:#fff;border:1.5px solid #C9C6DB;border-radius:14px;padding:0 10px;min-height:44px;flex:1;min-width:150px}
+.pgsearch input{border:none;outline:none;flex:1;min-width:0;font-size:15px;background:transparent}
+.pgseg{flex:none}.pgseg button{min-height:44px;padding:0 12px;flex:none}
+.pglegend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;font-weight:700}
+.pglegend span{display:flex;align-items:center;gap:5px}
+.pglegend i{width:13px;height:13px;border-radius:4px;border:1px solid #1C0B5B;display:inline-block}
+.pgmap{flex:1;min-height:300px;border-radius:16px;overflow:hidden;border:1.5px solid #C9C6DB;background:#fff;touch-action:none}
+.pgmap svg{width:100%;height:100%;display:block}
+.pgbar{background:#fff;border-top:1.5px solid var(--q);border-radius:18px 18px 0 0;padding:10px;display:flex;flex-direction:column;gap:8px;box-shadow:0 -6px 18px rgba(28,11,91,.10)}
+.pgsum{display:flex;flex-direction:column}.pgsum b{font-size:15px}.pgsum span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pgopts{display:flex;gap:8px;flex-wrap:wrap}
+.pgopts label{display:flex;flex-direction:column;font-size:12px;font-weight:700;gap:3px;flex:1;min-width:140px}
+.pgopts .inp{min-height:42px;font-size:15px}
+.pgopts label.nt{color:var(--red)}.pgopts label.nt .inp{border-color:var(--red);background:var(--redbg)}
+.pgbtns{display:flex;gap:6px;flex-wrap:wrap}
+.pgbtns .btn{min-height:48px;flex:1 1 auto}
+.pgbtns .btn[disabled]{background:#F1F0F5;border-color:#E3E1EC;color:#9A97B5}
+.pgtabs{display:flex;gap:6px}
+.pgtabs button{flex:1;min-height:44px;border-radius:14px;border:1.5px solid var(--line);background:#fff;font-weight:700}
+.pgtabs button.sel{background:var(--q);color:#fff;border-color:var(--q)}
+.pglist{display:flex;flex-direction:column;gap:6px}
+.pgrow{display:flex;align-items:center;gap:10px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:9px 10px;text-align:left;min-height:56px}
+.pgrow.sel{border:2px solid #FF6A00;background:#FFF1E6}
+.pgck{width:26px;height:26px;border-radius:8px;border:2px solid var(--q);display:flex;align-items:center;justify-content:center;flex:none;color:#fff}
+.pgck .ic{width:16px;height:16px}
+.pgrow.sel .pgck{background:#FF6A00;border-color:#FF6A00}
+.pgn{flex:1;min-width:0;display:flex;flex-direction:column}
+.pgn b{font-size:16px}.pgn small{font-size:12px;color:var(--muted)}
+.pgwarn{color:#8E1F14 !important;font-weight:700}
+.pgcs{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.pgc{border-radius:8px;padding:3px 7px;font-size:11px;font-weight:800;background:#F1F0F5;color:#9A97B5;white-space:nowrap}
+.pgsub{font-size:11px;color:var(--muted)}
+.pgopts2{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+@media (min-width:900px){.pgbar{flex-direction:row;align-items:flex-end;flex-wrap:wrap}.pgsum{flex:1 1 220px;min-width:0}.pgbtns .btn{flex:none}}
+.pgapp .pgfoot{display:flex !important;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+@media (max-width:760px){.pgfoot .status,.pgfoot .foot-ep{display:none}.pgfoot .btn{flex:1;min-height:46px}}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -699,7 +744,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.2.1';
+const APP_VERSION = '2.4.0';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -811,6 +856,32 @@ function recHours(r) {
   return ms > 0 ? round2(ms / 3600000) : 0;
 }
 
+/* ---------------- safe start: never wait forever ---------------- */
+function withTimeout(p, ms, label) {
+  let t;
+  return Promise.race([Promise.resolve(p).finally(() => clearTimeout(t)),
+    new Promise((_, rej) => { t = setTimeout(() => rej(new Error('TIMEOUT: ' + label)), ms); })]);
+}
+const Boot = {
+  step: 'start', done: false, timer: null,
+  watch(title) {
+    this.timer = setTimeout(() => { if (!this.done) this.fail(title, new Error('TIMEOUT: ' + this.step)); }, 15000);
+  },
+  ok() { this.done = true; clearTimeout(this.timer); },
+  fail(title, e) {
+    this.done = true; clearTimeout(this.timer);
+    const msg = (e && e.message) || String(e);
+    const root = document.getElementById('root');
+    if (!root) return;
+    root.innerHTML = `<div style="max-width:560px;margin:60px auto;padding:24px;background:#fff;border-radius:18px;font-family:Arial,sans-serif;color:#1C0B5B;box-shadow:0 6px 24px rgba(28,11,91,.12)">
+      <h2 style="margin:0 0 10px">${esc(title)} could not start</h2>
+      <p style="line-height:1.5;margin:0 0 10px">Edge did not answer while opening the saved data. <b>Your data is not deleted.</b></p>
+      <p style="line-height:1.5;margin:0 0 14px">1. Close <b>all</b> Edge windows and open the Admin again.<br>2. If it still fails, restart the PC.<br>3. If it still fails, send a photo of this screen.</p>
+      <p style="font-size:12px;color:#6B6790;margin:0 0 16px">Step: ${esc(this.step)} · ${esc(msg)}</p>
+      <button onclick="location.reload()" style="min-height:44px;padding:0 22px;border:none;border-radius:14px;background:#1C0B5B;color:#fff;font-weight:700;font-size:15px;cursor:pointer">Try again</button></div>`;
+  }
+};
+
 /* ---------------- storage (IndexedDB with localStorage fallback) ---------------- */
 const Store = {
   _db: null,
@@ -823,8 +894,9 @@ const Store = {
         rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
         rq.onsuccess = () => res(rq.result);
         rq.onerror = () => rej(rq.error);
+        rq.onblocked = () => rej(new Error('Saved data is locked by another Edge window'));
       });
-    } catch (e) { this._db = null; }
+    } catch (e) { this._db = null; this.openError = e; }
   },
   async get(key) {
     if (this._db) {
@@ -1168,7 +1240,8 @@ function pdfHeader(doc, opt) {
   doc.line(xInfo, T + 19, xTitle, T + 19); doc.text(QSL.web, xInfo + 2, T + 23.5);
   const subY = T + 17.5;
   doc.line(xTitle, subY, xRight, subY);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(opt.title.length > 26 ? 15 : 18);
+  doc.setFont('helvetica', 'bold'); let tfs = opt.title.length > 26 ? 15 : 18; doc.setFontSize(tfs);
+  while (doc.getTextWidth(opt.title) > wTitle - 6 && tfs > 9) { tfs -= 0.5; doc.setFontSize(tfs); }
   doc.text(opt.title, xTitle + wTitle / 2, T + 11.5, { align: 'center' });
   doc.setFontSize(11); doc.text(opt.subtitle || 'QSL MAN-HOURS', xTitle + wTitle / 2, subY + 6, { align: 'center' });
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8);
@@ -1186,8 +1259,13 @@ function pdfHeader(doc, opt) {
   doc.text('Date:', xRight + 2, subY + 7.9); doc.text(fmtDate(opt.date), R - 2, subY + 7.9, { align: 'right' });
   const yS = T + H1;
   doc.rect(L, yS, R - L, 6.5);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
-  doc.text(opt.summary || '', W / 2, yS + 4.6, { align: 'center', maxWidth: R - L - 4 });
+  /* the summary line always fits in one line: smaller letter, and if still too long it is cut with … (no text over the table) */
+  doc.setFont('helvetica', 'bold');
+  let sm = String(opt.summary || ''), sfs = 9.5; const sAvail = R - L - 6;
+  doc.setFontSize(sfs);
+  while (doc.getTextWidth(sm) > sAvail && sfs > 7) { sfs -= 0.25; doc.setFontSize(sfs); }
+  if (doc.getTextWidth(sm) > sAvail) { while (sm.length > 4 && doc.getTextWidth(sm + '…') > sAvail) sm = sm.slice(0, -1); sm = sm.trimEnd() + '…'; }
+  doc.text(sm, W / 2, yS + 4.6, { align: 'center' });
   return yS + 6.5;
 }
 
@@ -1572,7 +1650,8 @@ const ICONS = {
   release: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
   userplus: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.7-3.5 3.3-5.5 6.5-5.5s5.8 2 6.5 5.5"/><path d="M19 8v6M16 11h6"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
-  warn: '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>'
+  warn: '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',
+  folder: '<path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>'
 };
 function icon(name, cls) {
   return `<svg class="ic ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -1585,7 +1664,7 @@ function icon(name, cls) {
 'use strict';
 
 let S = null;
-const ui = { tab: '', sel: [], multi: false, filter: '', pane: 'crew' };
+const ui = { tab: '', sel: [], multi: false, filter: '', pane: 'crew', mode: '' };
 const UNDO_MAX = 20;
 
 function defaultState() {
@@ -2403,8 +2482,9 @@ function standbyModal() {
 
 /* ---------------- send to admin / report ---------------- */
 async function sendToAdmin() {
-  const n = pending();
-  if (!n) { UI.toast('Nothing new to send. Admin already has everything.', 'ok'); return; }
+  const n = pending(), pn = typeof pgPending === 'function' ? pgPending() : 0;
+  if (!n && !pn) { UI.toast('Nothing new to send. Admin already has everything.', 'ok'); return; }
+  if (!n && pn) { await pgSendOnly(); return; }     /* only progress today: a progress file */
   const changed = S.records.filter(r => r.ts > S.lastSend);
   const dates = Array.from(new Set(changed.map(r => r.date).concat(S.absences.filter(a => a.ts > S.lastSend).map(a => a.date)).concat(S.completed.filter(c => c.ts > S.lastSend).map(c => c.date)))).sort();
   if (!dates.length) dates.push(today());
@@ -2413,12 +2493,14 @@ async function sendToAdmin() {
   if (open && !await UI.confirm('Send to Admin', `${open} worker(s) are still on the clock. Their hours go when you send again after End day.\nSend now?`, 'Send now')) return;
   const payload = { type: 'QSL_HH_DAY', version: APP_VERSION, sup: S.sup, dev: S.dev, dates, date: dates[dates.length - 1],
     sentAt: new Date().toISOString(), records: recs, absences: S.absences.filter(a => dates.includes(a.date)), completed: S.completed, customSJ: S.customSJ };
+  if (pn) payload.progress = pgPayload();          /* progress marks travel in the same file */
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
   const fname = `HH_${today()}_${slug(S.sup || 'SUP')}_${nowHM().replace(':', '')}.qslhh`;
   const stamp = Date.now();
   const how = await shareOrDownload(blob, fname, 'QSL man-hours ' + today());
   if (how === 'cancelled') return;
   S.lastSend = stamp;
+  if (pn) await pgMarkSent();
   S.customSJ.forEach(c => { c.sent = true; });
   await save(); render();
   UI.toast(how === 'shared' ? 'Sent. Admin imports the file.' : `File saved: ${fname}. Send it to Admin.`, 'ok');
@@ -2604,8 +2686,8 @@ function tapWorker(code) {
 let lastView = '';
 function render() {
   // keep the lists where the supervisor left them (unless he changed tab or pane)
-  const view = ui.tab + '|' + ui.pane;
-  const keep = view === lastView ? ['.pane-crew .scroll', '.pane-jobs .scroll', '.morelist', '.tabs', '.actions']
+  const view = ui.mode + '|' + ui.tab + '|' + ui.pane + '|' + (ui.mode === 'progress' && typeof PG !== 'undefined' ? PG.ui.pid + PG.ui.tab : '');
+  const keep = view === lastView ? ['.pane-crew .scroll', '.pane-jobs .scroll', '.morelist', '.tabs', '.actions', '.pgmain', '.pglist', '.pgchips']
     .map(q => { const e = document.querySelector(q); return e ? [q, e.scrollTop, e.scrollLeft] : null; }).filter(Boolean) : [];
   renderView();
   lastView = view;
@@ -2614,6 +2696,7 @@ function render() {
 function renderView() {
   const root = document.getElementById('root');
   if (locked()) { lockScreen(root); return; }
+  if (ui.mode === 'progress') { pgRender(root); return; }
   if (!S.myWOs.includes(ui.tab)) ui.tab = S.myWOs[0] || '';
   const timeTxt = S.timeManual ? `SET ${S.timeManual}` : `NOW ${nowHM()}`;
   const nPend = pending();
@@ -2634,6 +2717,7 @@ function renderView() {
         <h2>Welcome</h2>
         <p>To start, import the <b>lists file</b> from the office (workers, WO and sub jobs).</p>
         <button class="btn primary" data-a="import">${icon('download')} Import lists</button>
+        <button class="btn" data-a="progress" style="margin-top:10px">${icon('chart')} Progress (tank / piping)</button>
         ${iosBrowser() ? `<div class="note" style="margin-top:16px;text-align:left">iPhone: first tap <b>Share › Add to Home Screen</b> and always open the app from that icon. Safari and the icon keep separate data.</div>` : ''}
       </div></div>
       <div class="foot"><span class="status"></span><span class="foot-ep">Powered by <img src="${LOGO_EP}" alt="EP"></span></div></div>`;
@@ -2649,7 +2733,8 @@ function renderView() {
     root.innerHTML = `<div class="app">${top}${tabs}
       <div class="welcome"><div class="box"><h2>Open your first WO</h2>
         <p>1. Open the WO you run · 2. Turn on your crew · 3. Start day.</p>
-        <button class="btn primary" data-a="addwo">${icon('plus')} Open a WO</button></div></div>
+        <button class="btn primary" data-a="addwo">${icon('plus')} Open a WO</button>
+        <button class="btn" data-a="progress" style="margin-top:10px">${icon('chart')} Progress (tank / piping)</button></div></div>
       ${footer(nPend, '')}</div>`;
     return;
   }
@@ -2733,6 +2818,7 @@ function renderView() {
 
   const more = `<div class="col pane-more"><div class="morelist">
       <button class="mi upd" data-a="import">${icon('download')}<span>Update lists from office${S.listsDate ? `<small style="display:block;font-weight:600;font-size:12px">Last update: ${fmtDate(S.listsDate.slice(0, 10))}</small>` : ''}</span></button>
+      <button class="mi" data-a="progress">${icon('chart')}<span>Progress · tank map / piping</span>${typeof pgPending === 'function' && pgPending() ? `<span class="badge">${pgPending()}</span>` : ''}</button>
       <button class="mi" data-a="send">${icon('send')}<span>Send to Admin</span>${nPend ? `<span class="badge">${nPend}</span>` : ''}</button>
       <button class="mi" data-a="report">${icon('report')}<span>Daily report</span></button>
       <button class="mi" data-a="summary">${icon('flag')}<span>Day summary</span></button>
@@ -2766,6 +2852,7 @@ function footer(nPend, status) {
       <button class="btn sm primary" data-a="send">${icon('send')} Send to Admin${nPend ? ` <span class="badge">${nPend}</span>` : ''}</button>
       <button class="btn sm upd" data-a="import">${icon('download')} Update lists</button>
       <button class="btn sm" data-a="report">${icon('share')} Daily report</button>
+      <button class="btn sm" data-a="progress">${icon('chart')} Progress</button>
       <button class="btn sm ghost" data-a="settings" aria-label="Settings">${icon('gear')}</button>
       <span class="status">${esc(status)}</span>
       <span class="foot-ep">Powered by <img src="${LOGO_EP}" alt="EP"></span>
@@ -2777,6 +2864,7 @@ function onClick(e) {
   if (!e.target.isConnected) return;            // the tap was on a window that just closed
   if (document.getElementById('modal')) return;
   if (locked()) return;
+  if (ui.mode === 'progress') { pgClick(e); return; }
   const p = e.target.closest('[data-p]');
   // a chip on a card picks that worker, unless someone is already selected: then the tap means "go here"
   if (p && !(ui.sel.length && !ui.sel.includes(p.dataset.p) && !ui.multi && p.closest('[data-t]'))) { e.stopPropagation(); tapWorker(p.dataset.p); return; }
@@ -2813,6 +2901,7 @@ function onClick(e) {
     case 'summary': summaryModal(today()); break;
     case 'settings': openSettings(false); break;
     case 'time': timeModal(); break;
+    case 'progress': ui.mode = 'progress'; ui.sel = []; render(); break;
   }
 }
 
@@ -2822,6 +2911,7 @@ async function boot() {
   S = Object.assign(defaultState(), saved || {});
   S.lists = Object.assign(emptyLists(), S.lists || {});
   ui.tab = S.myWOs[0] || '';
+  await pgLoad();
   render();
   document.addEventListener('click', onClick);
   let wasPhone = isPhone();
@@ -2836,5 +2926,429 @@ async function boot() {
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 }
 window.addEventListener('DOMContentLoaded', boot);
+
+/* =====================================================================
+   QSL PROGRESS · supervisor module (inside the Man-hours supervisor app)
+   Tank repair map and piping joint list. The office sends the lists
+   (.qslplist); the supervisor marks progress; the marks travel inside the
+   day file (or alone as .qslprog). Powered by EP
+   ===================================================================== */
+'use strict';
+
+const PG = {
+  S: null,
+  ui: { pid: '', sel: new Set(), tab: 'joints', iso: 'ALL', spool: 'ALL', loc: 'ALL', stf: 'ALL', q: '', vb: {}, mode: 'tap', crew: '', date: '' },
+  cache: null
+};
+const PG_STG = {
+  GOU: { r: 'Gouging', p: 'Gouging', color: '#D61F8C', ink: '#FFFFFF' },
+  FIT: { r: 'Fitting', p: 'Fit-up', color: '#F2C200', ink: '#3D2A00' },
+  WEL: { r: 'Welding', p: 'Welded', color: '#2E9D5B', ink: '#FFFFFF' },
+  TST: { r: 'Test', p: 'Test', color: '#4FC3F7', ink: '#0B3A52' },
+  DONE: { r: 'Done', p: 'Done', color: '#2E9D5B', ink: '#FFFFFF' },
+  TRQ: { r: 'Torque', p: 'Torque', color: '#4FC3F7', ink: '#0B3A52' },
+  INS: { r: 'Installed', p: 'Installed', color: '#2E9D5B', ink: '#FFFFFF' },
+  SHIP: { r: 'Shipped', p: 'Shipped', color: '#8E5CD9', ink: '#FFFFFF' },
+  INST: { r: 'Installed', p: 'Installed', color: '#1E5631', ink: '#FFFFFF' },
+  PLS: { r: 'Strip placed', p: 'Strip placed', color: '#F2C200', ink: '#3D2A00' },
+  PLN: { r: 'Node placed', p: 'Node placed', color: '#E0262B', ink: '#FFFFFF' }
+};
+const PG_KS = { PATCH: ['FIT', 'WEL', 'TST'], PLATE: ['GOU', 'FIT', 'WEL', 'TST'], JOINT: ['FIT', 'WEL'], THREAD: ['DONE'], TORQUE: ['TRQ'], OTHER: ['INS'], SPOOL: ['SHIP', 'INST'], STRIP: ['PLS'], NODE: ['PLN'] };
+const PG_DPEND = '#C9C6DB', PG_DREF = '#7FB8D6';
+const PG_PEND = '#E3E1EC', PG_SEL = '#FF6A00';
+
+/* ---------------- storage ---------------- */
+async function pgLoad() {
+  try { PG.S = Object.assign({ lists: null, marks: [], at: '' }, (await Store.get('progress')) || {}); }
+  catch (e) { PG.S = { lists: null, marks: [], at: '' }; }
+}
+async function pgSave() { PG.cache = null; const ok = await Store.set('progress', PG.S); if (!ok) UI.toast('Could not save on this device.', 'err'); }
+const pgProjects = () => (PG.S && PG.S.lists ? PG.S.lists.projects : []) || [];
+const pgProj = id => pgProjects().find(p => p.id === id);
+const pgCur = () => pgProj(PG.ui.pid);
+const pgRep = p => p.type === 'REPAIR';
+const pgDome = p => p.type === 'DOME';
+const pgIsMap = p => pgRep(p) || pgDome(p);
+const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length : 0;
+const pgLabel = (p, s) => (pgRep(p) ? PG_STG[s].r : PG_STG[s].p);
+const pgF1 = x => (Math.round((x + Number.EPSILON) * 10) / 10).toFixed(1);
+const pgPct = (a, b) => b > 0 ? Math.round(a / b * 1000) / 10 : 0;
+
+/* office marks + my marks (in order) = what the field sees */
+function pgMarks(p) {
+  if (!PG.cache) PG.cache = {};
+  if (PG.cache[p.id]) return PG.cache[p.id];
+  const m = JSON.parse(JSON.stringify(p.marks || {}));
+  const byId = new Map(p.items.map(i => [i.id, i]));
+  PG.S.marks.filter(x => x.pid === p.id).sort((a, b) => String(a.at).localeCompare(String(b.at))).forEach(x => {
+    const it = byId.get(x.item); if (!it) return;
+    const st = PG_KS[it.kind] || [];
+    if (x.act === 'SET') { (m[x.item] = m[x.item] || {})[x.stage] = { date: x.date, by: x.by, crew: x.crew || '', src: 'FIELD' }; }
+    else if (m[x.item]) { const k = st.indexOf(x.stage); st.forEach((s, i) => { if (i >= k) delete m[x.item][s]; }); if (!Object.keys(m[x.item]).length) delete m[x.item]; }
+  });
+  PG.cache[p.id] = m;
+  return m;
+}
+const pgM = (p, it) => pgMarks(p)[it.id] || {};
+const pgStages = it => PG_KS[it.kind] || [];
+function pgDone(p, it) { const m = pgM(p, it); let k = -1; pgStages(it).forEach((s, i) => { if (m[s]) k = i; }); return k; }
+const pgNext = (p, it) => pgStages(it)[pgDone(p, it) + 1] || '';
+const pgStatus = (p, it) => { const k = pgDone(p, it); return k < 0 ? '' : pgStages(it)[k]; };
+const pgColor = (p, it) => { const s = pgStatus(p, it); return s ? PG_STG[s].color : PG_PEND; };
+const pgSpoolOf = (p, it) => it.spool ? p.items.find(x => x.id === `S|${it.iso}|${it.spool}`) : null;
+const pgInShop = (p, it) => { if (it.kind !== 'JOINT' || it.loc !== 'FIELD' || !it.spool) return false; const sp = pgSpoolOf(p, it); return !!sp && !pgM(p, sp).SHIP; };
+function pgSpoolInfo(p, sp) {
+  const J = p.items.filter(i => i.kind === 'JOINT' && i.iso === sp.iso && i.spool === sp.spool);
+  const shop = J.filter(i => i.loc === 'SHOP'), sw = shop.filter(i => pgM(p, i).WEL);
+  const ready = shop.length === sw.length, m = pgM(p, sp);
+  return { shop: shop.length, shopW: sw.length, ready, status: m.INST ? 'Installed' : m.SHIP ? 'Shipped' : ready ? 'Ready' : 'In shop' };
+}
+const pgName = it => it.kind === 'JOINT' || it.kind === 'THREAD' ? `${it.spool ? 'SP' + it.spool + ' · ' : ''}${it.joint}` : it.kind === 'TORQUE' ? `${it.spool ? 'SP' + it.spool + ' · ' : ''}${it.tag}` : it.kind === 'SPOOL' ? `Spool ${it.spool}` : it.kind === 'OTHER' ? it.tag : it.id;
+const pgQty = (p, it) => pgRep(p) ? (it.ft || 0) : (it.kind === 'JOINT' || it.kind === 'THREAD') ? (it.nd || 0) : 1;
+const pgUnit = (p, it) => pgRep(p) ? 'ft' : it.kind === 'STRIP' ? 'strips' : it.kind === 'NODE' ? 'nodes' : (it.kind === 'JOINT' || it.kind === 'THREAD') ? 'in-dia' : it.kind === 'SPOOL' ? 'spools' : 'pcs';
+
+/* ---------------- marking ---------------- */
+function pgMark(p, ids, stage) {
+  const date = PG.ui.date || todayStr(), batch = uid();
+  let done = 0, skip = 0, blocked = 0;
+  ids.forEach(id => {
+    const it = p.items.find(x => x.id === id);
+    if (it && !pgStages(it).includes(stage)) return;   /* a node when marking strips (and the other way): not counted */
+    if (!it || pgNext(p, it) !== stage) { skip++; return; }
+    if (pgInShop(p, it)) { blocked++; return; }
+    if (it.kind === 'SPOOL' && stage === 'SHIP' && !pgSpoolInfo(p, it).ready) { blocked++; return; }
+    PG.S.marks.push({ uid: uid(), batch, at: new Date().toISOString(), pid: p.id, item: id, stage, act: 'SET', date, by: S.sup || '', crew: p.type === 'PIPING' && PG.ui.tab === 'joints' ? PG.ui.crew.trim() : '', sent: false });
+    PG.cache = null; done++;
+  });
+  return { done, skip, blocked };
+}
+function pgBack(p, ids, keep) {
+  const batch = uid(); let n = 0;
+  ids.forEach(id => {
+    const it = p.items.find(x => x.id === id); if (!it) return;
+    const st = pgStages(it), k = keep ? st.indexOf(keep) : -1, nx = st[k + 1];
+    if (!nx || !pgM(p, it)[nx]) return;
+    PG.S.marks.push({ uid: uid(), batch, at: new Date().toISOString(), pid: p.id, item: id, stage: nx, act: 'CLR', date: todayStr(), by: S.sup || '', crew: '', sent: false });
+    PG.cache = null; n++;
+  });
+  return n;
+}
+/* undo my last action (only while it has not been sent) */
+async function pgUndo() {
+  const un = PG.S.marks.filter(m => !m.sent);
+  if (!un.length) { UI.toast('Nothing to undo (what was sent stays; use Back to…).', 'err'); return; }
+  const b = un[un.length - 1].batch, n = PG.S.marks.filter(m => m.batch === b).length;
+  if (!await UI.confirm('Undo', `Undo the last action (${n} mark(s))?`, 'Undo')) return;
+  PG.S.marks = PG.S.marks.filter(m => m.batch !== b);
+  await pgSave(); render();
+}
+
+/* ---------------- files ---------------- */
+async function pgImport() {
+  const f = await UI.pickFile(false); if (!f.length) return;
+  try {
+    const data = JSON.parse(await readFileText(f[0]));
+    if (data.type !== 'QSL_PROGRESS_LISTS' || !Array.isArray(data.projects)) throw new Error('This is not a progress lists file (Progress Admin → Import / Export → Export lists).');
+    const at = data.at || new Date().toISOString();
+    /* keep my marks that the office does not have yet */
+    PG.S.marks = PG.S.marks.filter(m => !m.sent || String(m.at) > String(at));
+    PG.S.lists = { at, by: data.by || '', projects: data.projects };
+    PG.S.at = new Date().toISOString();
+    if (!pgProj(PG.ui.pid)) PG.ui.pid = (data.projects[0] || {}).id || '';
+    PG.ui.sel = new Set();
+    await pgSave(); render();
+    UI.toast(`Progress lists loaded: ${data.projects.length} project(s).`, 'ok');
+  } catch (e) { UI.alert('Progress lists', 'Could not import the file.\n' + (e.message || e)); }
+}
+function pgPayload() { return { type: 'QSL_PROGRESS_DAY', v: 1, sup: S.sup || '', dev: S.dev, at: new Date().toISOString(), marks: PG.S.marks.filter(m => !m.sent).map(m => { const x = Object.assign({}, m); delete x.sent; delete x.batch; return x; }) }; }
+async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); await pgSave(); }
+async function pgSendOnly() {
+  const n = pgPending();
+  if (!n) { UI.toast('No progress to send.', 'ok'); return; }
+  const blob = new Blob([JSON.stringify(pgPayload())], { type: 'application/json' });
+  const fname = `PROGRESS_${todayStr()}_${slug(S.sup || 'SUP')}_${nowHM().replace(':', '')}.qslprog`;
+  const how = await shareOrDownload(blob, fname, 'QSL progress ' + todayStr());
+  if (how === 'cancelled') return;
+  await pgMarkSent(); render();
+  UI.toast(how === 'shared' ? 'Progress sent. The office imports it in Progress Admin.' : `File saved: ${fname}. Send it to the office.`, 'ok');
+}
+
+/* ---------------- screen ---------------- */
+function pgTop() {
+  return `<div class="top"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div>
+      <div class="ttl">PROGRESS<span class="hide-sm"> · SUPERVISOR</span></div>
+      <div class="pills"><button class="pill tap hide-sm" data-a="settings">${esc(S.sup || 'Choose supervisor')}</button><span class="pill">${fmtDate(todayStr())}</span></div>
+    </div><div class="band"></div>`;
+}
+function pgRender(root) {
+  const P0 = pgProjects();
+  if (P0.length && !pgCur()) PG.ui.pid = P0[0].id;
+  const p = pgCur();
+  const nP = pgPending() + pending();
+  const head = `<div class="pgh"><button class="btn sm" data-a="pgback">${icon('undo')} Man-hours</button>
+    <div class="pgchips">${P0.map(x => `<button class="chip ${x.id === PG.ui.pid ? 'sel' : ''}" data-pgp="${esc(x.id)}">${pgRep(x) ? 'Tank' : pgDome(x) ? 'Dome' : 'Piping'} · ${esc(x.name)}</button>`).join('')}</div></div>`;
+  let body = '';
+  if (!P0.length) body = `<div class="welcome"><div class="box"><img src="${LOGO_EP}" alt="EP" style="height:64px"><h2>Progress</h2>
+      <p>Import the <b>progress lists</b> from the office (Progress Admin → Import / Export → Export lists).</p>
+      <button class="btn primary" data-a="pgimport">${icon('download')} Import progress lists</button></div></div>`;
+  else body = pgIsMap(p) ? pgRepair(p) : pgPiping(p);
+  root.innerHTML = `<div class="app pgapp">${pgTop()}${head}<div class="pgmain">${body}</div>
+    ${p ? pgBar(p) : ''}
+    <div class="foot pgfoot"><button class="btn sm primary" data-a="send">${icon('send')} Send to Admin${nP ? ` <span class="badge">${nP}</span>` : ''}</button>
+      <button class="btn sm upd" data-a="pgimport">${icon('download')} Lists</button>
+      <button class="btn sm" data-a="pgundo" ${PG.S.marks.some(m => !m.sent) ? '' : 'disabled'}>${icon('undo')} Undo</button>
+      <span class="status">${PG.S.lists ? `Lists ${fmtDate(String(PG.S.lists.at).slice(0, 10))}` : ''}${pgPending() ? ` · ${pgPending()} mark(s) not sent` : ''}</span>
+      <span class="foot-ep">Powered by <img src="${LOGO_EP}" alt="EP"></span></div></div>`;
+  pgWireMap();
+}
+function pgSelItems(p) { return Array.from(PG.ui.sel).map(id => p.items.find(i => i.id === id)).filter(Boolean); }
+function pgBar(p) {
+  const items = pgSelItems(p);
+  const qty = {}; items.forEach(it => { const u = pgUnit(p, it); qty[u] = (qty[u] || 0) + pgQty(p, it); });
+  const all = pgRep(p) ? ['GOU', 'FIT', 'WEL', 'TST'] : pgDome(p) ? ['PLS', 'PLN'] : PG.ui.tab === 'spools' ? ['SHIP', 'INST'] : PG.ui.tab === 'torque' ? ['TRQ'] : PG.ui.tab === 'other' ? ['INS'] : ['FIT', 'WEL'];
+  const st = items.length ? all.filter(s => items.some(it => pgStages(it).includes(s))) : all;
+  const d = PG.ui.date || todayStr();
+  return `<div class="pgbar" id="pgbar">
+    <div class="pgsum"><b>${items.length ? `${items.length} selected · ${Object.entries(qty).map(([u, q]) => `${['spools', 'pcs', 'strips', 'nodes'].includes(u) ? q : pgF1(q)} ${u}`).join(' · ')}` : 'Tap to select'}</b>
+      <span>${items.slice(0, 10).map(it => esc(pgName(it))).join(', ')}${items.length > 10 ? ' …' : ''}</span></div>
+    <div class="pgopts"><label class="${d !== todayStr() ? 'nt' : ''}">Date<input type="date" id="pgDate" class="inp" value="${d}" max="${todayStr()}"></label>
+      ${!pgIsMap(p) && PG.ui.tab === 'joints' ? `<label>Fitter initials / stamp<input id="pgCrew" class="inp" value="${esc(PG.ui.crew)}" placeholder="JR / MP · W-12"></label>` : ''}</div>
+    <div class="pgbtns">${st.map(s => { const n = items.filter(it => pgNext(p, it) === s).length;
+      return `<button class="btn" data-pgmark="${s}" ${n ? '' : 'disabled'} style="${n ? `background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}` : ''}">${esc(pgLabel(p, s))}${n ? ` ✓ ${n}` : ''}</button>`; }).join('')}
+      <button class="btn ghost" data-a="pgbacksel" ${items.some(it => pgDone(p, it) >= 0) ? '' : 'disabled'}>Back to…</button>
+      <button class="btn ghost" data-a="pgclear" ${items.length ? '' : 'disabled'} aria-label="Clear selection">${icon('x')}</button></div></div>`;
+}
+function pgRefresh() {
+  const p = pgCur(); if (!p) return;
+  const b = document.getElementById('pgbar');
+  if (b) { const t = document.createElement('div'); t.innerHTML = pgBar(p); b.replaceWith(t.firstElementChild); }
+  if (pgDome(p)) {
+    document.querySelectorAll('[data-sv]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.sv); if (!it) return; const s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLS; el.setAttribute('stroke', s ? PG_SEL : dn ? PG_STG.PLS.color : PG_DPEND); el.setAttribute('stroke-width', el.dataset.w * (s ? 4.2 : dn ? 3.4 : 2)); });
+    document.querySelectorAll('circle[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (!it) return; const s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLN; el.setAttribute('fill', s ? PG_SEL : dn ? PG_STG.PLN.color : '#FFFFFF'); el.setAttribute('stroke', s ? PG_SEL : dn ? PG_STG.PLN.color : '#8C86B8'); });
+  } else document.querySelectorAll('[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (it) el.setAttribute('fill', PG.ui.sel.has(it.id) ? PG_SEL : pgColor(p, it)); });
+  document.querySelectorAll('[data-pgr]').forEach(r => r.classList.toggle('sel', PG.ui.sel.has(r.dataset.pgr)));
+}
+
+/* ----- tank map ----- */
+function pgBox(p) { const R = (p.geo && (p.geo.R || p.geo.D / 2)) || 100, pad = R * 0.03; return [-R - pad, -R - pad, 2 * (R + pad), 2 * (R + pad)]; }
+function pgDomeSvg(p, vb) {
+  const g = p.geo, R = g.D / 2, sw = Math.max(vb[2], vb[3]) / 600, nr = Math.max(R / 110, sw * 3);
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" id="pgmap" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">`];
+  (g.ref || []).forEach(l => out.push(`<line x1="${l[0]}" y1="${-l[1]}" x2="${l[2]}" y2="${-l[3]}" stroke="${PG_DREF}" stroke-width="${sw * 0.8}"/>`));
+  const S = p.items.filter(i => i.kind === 'STRIP'), N = p.items.filter(i => i.kind === 'NODE');
+  S.forEach(it => { const a = it.pts[0], b = it.pts[1], s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLS;
+    out.push(`<line data-sv="${esc(it.id)}" data-w="${sw}" x1="${a[0]}" y1="${-a[1]}" x2="${b[0]}" y2="${-b[1]}" stroke="${s ? PG_SEL : dn ? PG_STG.PLS.color : PG_DPEND}" stroke-width="${sw * (s ? 4.2 : dn ? 3.4 : 2)}" stroke-linecap="round" pointer-events="none"/>`);
+    out.push(`<line data-pc="${esc(it.id)}" x1="${a[0]}" y1="${-a[1]}" x2="${b[0]}" y2="${-b[1]}" stroke="rgba(0,0,0,0)" stroke-width="${sw * 14}"/>`); });
+  N.forEach(it => { const c = it.pts[0], s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLN;
+    out.push(`<circle data-pc="${esc(it.id)}" cx="${c[0]}" cy="${-c[1]}" r="${nr}" fill="${s ? PG_SEL : dn ? PG_STG.PLN.color : '#FFFFFF'}" stroke="${s ? PG_SEL : dn ? PG_STG.PLN.color : '#8C86B8'}" stroke-width="${sw * 1.2}"/>`); });
+  if (vb[2] < R * 0.8) {
+    const fs = vb[2] / 28;
+    S.forEach(it => { const m = [(it.pts[0][0] + it.pts[1][0]) / 2, -(it.pts[0][1] + it.pts[1][1]) / 2];
+      if (m[0] < vb[0] || m[0] > vb[0] + vb[2] || m[1] < vb[1] || m[1] > vb[1] + vb[3]) return;
+      out.push(`<text x="${m[0]}" y="${m[1] + fs * 0.35}" font-size="${fs}" font-family="Arial" font-weight="700" fill="#1C0B5B" stroke="#FFFFFF" stroke-width="${fs * 0.25}" paint-order="stroke" text-anchor="middle" pointer-events="none">${esc(it.id)}</text>`); });
+  }
+  out.push('</svg>');
+  return out.join('');
+}
+function pgMapSvg(p) {
+  if (pgDome(p)) return pgDomeSvg(p, PG.ui.vb[p.id] || pgBox(p));
+  const g = p.geo || { lines: [], D: 200 }, R = g.D / 2, vb = PG.ui.vb[p.id] || pgBox(p), sw = Math.max(vb[2], vb[3]) / 600;
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" id="pgmap" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">`, `<circle cx="0" cy="0" r="${R}" fill="#fff" stroke="#1C0B5B" stroke-width="${sw * 2.2}"/>`];
+  (g.lines || []).forEach(l => out.push(`<line x1="${l[0]}" y1="${-l[1]}" x2="${l[2]}" y2="${-l[3]}" stroke="#B9B5CF" stroke-width="${sw * 0.7}"/>`));
+  p.items.forEach(it => { if (!it.pts) return; out.push(`<polygon data-pc="${esc(it.id)}" points="${it.pts.map(q => `${q[0]},${-q[1]}`).join(' ')}" fill="${PG.ui.sel.has(it.id) ? PG_SEL : pgColor(p, it)}" stroke="#1C0B5B" stroke-width="${sw}"/>`); });
+  if (vb[2] < R * 0.7) {
+    const fs = vb[2] / 26;
+    p.items.forEach(it => { if (!it.pts) return; const cx = it.pts.reduce((a, q) => a + q[0], 0) / it.pts.length, cy = -it.pts.reduce((a, q) => a + q[1], 0) / it.pts.length;
+      if (cx < vb[0] || cx > vb[0] + vb[2] || cy < vb[1] || cy > vb[1] + vb[3]) return;
+      const top = Math.min(...it.pts.map(q => -q[1]));
+      out.push(`<text x="${cx}" y="${top - fs * 0.25}" font-size="${fs}" font-family="Arial" font-weight="700" fill="#1C0B5B" text-anchor="middle" pointer-events="none">${esc(it.id)}</text>`); });
+  }
+  out.push('</svg>');
+  return out.join('');
+}
+function pgRepair(p) {
+  const st = ['GOU', 'FIT', 'WEL', 'TST'], dm = pgDome(p);
+  const leg = dm ? `<span><i style="background:${PG_DPEND}"></i>Strip</span><span><i style="background:${PG_STG.PLS.color}"></i>Strip placed</span><span><i style="background:#fff;border:2px solid #8C86B8;border-radius:50%"></i>Node</span><span><i style="background:${PG_STG.PLN.color};border-radius:50%"></i>Node placed</span><span><i style="background:${PG_DREF}"></i>Reference</span>`
+    : `<span><i style="background:${PG_PEND}"></i>Pending</span>${st.map(s => `<span><i style="background:${PG_STG[s].color}"></i>${PG_STG[s].r}</span>`).join('')}`;
+  return `<div class="pgtools"><div class="search pgsearch">${icon('search')}<input id="pgFind" placeholder="${dm ? 'Find strip (S045)' : 'Find piece (P1-045)'}" enterkeyhint="search"></div>
+      <div class="seg pgseg"><button class="${PG.ui.mode === 'tap' ? 'sel' : ''}" data-pgm="tap">Tap</button><button class="${PG.ui.mode === 'box' ? 'sel' : ''}" data-pgm="box">Box</button><button class="${PG.ui.mode === 'pan' ? 'sel' : ''}" data-pgm="pan">Move</button></div>
+      <button class="btn sm" data-a="pgzin" aria-label="Zoom in">+</button><button class="btn sm" data-a="pgzout" aria-label="Zoom out">−</button><button class="btn sm" data-a="pgzall">All</button></div>
+    <div class="pglegend">${leg}<span><i style="background:${PG_SEL}"></i>Selected</span></div>
+    <div class="pgmap" id="pgmapbox">${pgMapSvg(p)}</div>`;
+}
+function pgRedraw(p) { const b = document.getElementById('pgmapbox'); if (b) { b.innerHTML = pgMapSvg(p); pgWireMap(); } }
+function pgZoom(p, f) {
+  const vb = (PG.ui.vb[p.id] || pgBox(p)).slice(), full = pgBox(p), cx = vb[0] + vb[2] / 2, cy = vb[1] + vb[3] / 2;
+  const w = Math.min(full[2], Math.max(full[2] / 40, vb[2] * f)), k = w / vb[2];
+  PG.ui.vb[p.id] = [cx - (cx - vb[0]) * k, cy - (cy - vb[1]) * k, w, vb[3] * k]; pgRedraw(p);
+}
+function pgWireMap() {
+  const svg = document.getElementById('pgmap'); if (!svg) return;
+  const p = pgCur(); if (!p) return;
+  const pt = (x, y) => { const m = svg.getScreenCTM().inverse(); const q = new DOMPoint(x, y).matrixTransform(m); return [q.x, q.y]; };
+  const getVB = () => (PG.ui.vb[p.id] || pgBox(p)).slice();
+  const setVB = vb => { PG.ui.vb[p.id] = vb; svg.setAttribute('viewBox', vb.join(' ')); };
+  const ptrs = new Map(); let st = null, pinch = null, rect = null, redrawT = 0;
+  const later = () => { clearTimeout(redrawT); redrawT = setTimeout(() => pgRedraw(p), 280); };
+  svg.addEventListener('wheel', e => {
+    e.preventDefault(); const q = pt(e.clientX, e.clientY), vb = getVB(), full = pgBox(p), f = e.deltaY > 0 ? 1.18 : 1 / 1.18;
+    const w = Math.min(full[2], Math.max(full[2] / 40, vb[2] * f)), k = w / vb[2];
+    setVB([q[0] - (q[0] - vb[0]) * k, q[1] - (q[1] - vb[1]) * k, w, vb[3] * k]); later();
+  }, { passive: false });
+  svg.addEventListener('pointerdown', e => {
+    svg.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 2) {           /* two fingers: pinch zoom */
+      const [a, b] = Array.from(ptrs.values());
+      pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), vb: getVB(), c: pt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) };
+      st = null; if (rect) { rect.remove(); rect = null; } return;
+    }
+    st = { x: e.clientX, y: e.clientY, q: pt(e.clientX, e.clientY), vb: getVB(), moved: false, target: e.target };
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pinch && ptrs.size === 2) {
+      const [a, b] = Array.from(ptrs.values()), d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      const full = pgBox(p), w = Math.min(full[2], Math.max(full[2] / 40, pinch.vb[2] * pinch.d / Math.max(10, d))), k = w / pinch.vb[2];
+      setVB([pinch.c[0] - (pinch.c[0] - pinch.vb[0]) * k, pinch.c[1] - (pinch.c[1] - pinch.vb[1]) * k, w, pinch.vb[3] * k]); return;
+    }
+    if (!st) return;
+    if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > 8) st.moved = true;
+    if (!st.moved) return;
+    if (PG.ui.mode === 'box') {
+      const q = pt(e.clientX, e.clientY);
+      if (!rect) { rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); rect.setAttribute('fill', 'rgba(255,106,0,0.12)'); rect.setAttribute('stroke', PG_SEL); rect.setAttribute('stroke-width', st.vb[2] / 300); svg.appendChild(rect); }
+      rect.setAttribute('x', Math.min(q[0], st.q[0])); rect.setAttribute('y', Math.min(q[1], st.q[1])); rect.setAttribute('width', Math.abs(q[0] - st.q[0])); rect.setAttribute('height', Math.abs(q[1] - st.q[1]));
+    } else {          /* tap mode and move mode: one finger drags the map */
+      const r = svg.getBoundingClientRect(), s = Math.max(st.vb[2] / r.width, st.vb[3] / r.height);
+      setVB([st.vb[0] - (e.clientX - st.x) * s, st.vb[1] - (e.clientY - st.y) * s, st.vb[2], st.vb[3]]);
+    }
+  });
+  const end = e => {
+    ptrs.delete(e.pointerId);
+    if (pinch) { if (ptrs.size < 2) { pinch = null; later(); } return; }
+    if (!st) return; const s = st; st = null;
+    if (!s.moved) { const el = s.target.closest && s.target.closest('[data-pc]'); if (el && PG.ui.mode !== 'pan') { const id = el.dataset.pc; if (PG.ui.sel.has(id)) PG.ui.sel.delete(id); else PG.ui.sel.add(id); pgRefresh(); } return; }
+    if (PG.ui.mode === 'box' && rect) {
+      const q = pt(e.clientX, e.clientY), x0 = Math.min(q[0], s.q[0]), x1 = Math.max(q[0], s.q[0]), y0 = Math.min(q[1], s.q[1]), y1 = Math.max(q[1], s.q[1]);
+      rect.remove(); rect = null;
+      p.items.forEach(it => { if (!it.pts) return; const cx = it.pts.reduce((a, c) => a + c[0], 0) / it.pts.length, cy = -it.pts.reduce((a, c) => a + c[1], 0) / it.pts.length; if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) PG.ui.sel.add(it.id); });
+      pgRefresh(); return;
+    }
+    later();
+  };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+}
+
+/* ----- piping lists ----- */
+function pgPiping(p) {
+  const tabs = [['joints', 'Joints'], ['spools', 'Spools'], ['torque', 'Flanges'], ['other', 'Supports']].filter(t => t[0] === 'joints' || p.items.some(i => i.kind === { spools: 'SPOOL', torque: 'TORQUE', other: 'OTHER' }[t[0]]));
+  if (!tabs.some(t => t[0] === PG.ui.tab)) PG.ui.tab = 'joints';
+  const kinds = { joints: ['JOINT', 'THREAD'], spools: ['SPOOL'], torque: ['TORQUE'], other: ['OTHER'] }[PG.ui.tab];
+  const isos = Array.from(new Set(p.items.filter(i => kinds.includes(i.kind)).map(i => i.iso).filter(Boolean))).sort(cmpStr);
+  if (PG.ui.iso !== 'ALL' && !isos.includes(PG.ui.iso)) PG.ui.iso = 'ALL';
+  const spools = PG.ui.iso === 'ALL' ? [] : Array.from(new Set(p.items.filter(i => i.iso === PG.ui.iso && i.spool && kinds.includes(i.kind)).map(i => i.spool))).sort(cmpStr);
+  const q = PG.ui.q.trim().toUpperCase();
+  const rows = p.items.filter(i => kinds.includes(i.kind))
+    .filter(i => PG.ui.iso === 'ALL' || i.iso === PG.ui.iso)
+    .filter(i => PG.ui.spool === 'ALL' || !spools.length || i.spool === PG.ui.spool)
+    .filter(i => PG.ui.loc === 'ALL' || PG.ui.tab !== 'joints' || i.loc === PG.ui.loc)
+    .filter(i => { if (PG.ui.stf === 'ALL') return true; if (i.kind === 'SPOOL') return pgSpoolInfo(p, i).status === PG.ui.stf; const k = pgDone(p, i);
+      return PG.ui.stf === 'PEND' ? k < 0 : PG.ui.stf === 'DONE' ? !pgNext(p, i) : PG.ui.stf === 'TOWELD' ? pgNext(p, i) === 'WEL' : (k >= 0 && pgNext(p, i)); })
+    .filter(i => !q || `${i.iso || ''} ${i.spool || ''} ${i.joint || i.tag || ''}`.toUpperCase().includes(q))
+    .sort((a, b) => cmpStr(a.iso || '', b.iso || '') || cmpStr(a.spool || '', b.spool || '') || cmpStr(a.joint || a.tag || '', b.joint || b.tag || ''));
+  const stOpts = PG.ui.tab === 'spools' ? [['ALL', 'Any status'], ['In shop', 'In shop'], ['Ready', 'Ready'], ['Shipped', 'Shipped'], ['Installed', 'Installed']]
+    : [['ALL', 'Any status'], ['PEND', 'Pending']].concat(PG.ui.tab === 'joints' ? [['TOWELD', 'Fitted · to weld']] : [], [['DONE', 'Complete']]);
+  const chips = it => {
+    if (it.kind === 'SPOOL') { const inf = pgSpoolInfo(p, it); const c = inf.status === 'Installed' ? PG_STG.INST : inf.status === 'Shipped' ? PG_STG.SHIP : inf.status === 'Ready' ? PG_STG.FIT : null;
+      return `<span class="pgc" style="${c ? `background:${c.color};color:${c.ink}` : ''}">${inf.status}</span><span class="pgsub">shop ${inf.shopW}/${inf.shop}</span>`; }
+    return pgStages(it).map(s => { const m = pgM(p, it)[s]; return `<span class="pgc" style="${m ? `background:${PG_STG[s].color};color:${PG_STG[s].ink}` : ''}">${pgLabel(p, s)}${m ? ' ' + fmtDate(m.date).slice(0, 6) : ''}</span>`; }).join('');
+  };
+  return `<div class="pgtabs">${tabs.map(t => `<button class="${PG.ui.tab === t[0] ? 'sel' : ''}" data-pgt="${t[0]}">${t[1]}</button>`).join('')}</div>
+    <div class="pgtools">
+      <select class="inp" id="pgIso"><option value="ALL">All ISO</option>${isos.map(i => `<option ${PG.ui.iso === i ? 'selected' : ''}>${esc(i)}</option>`).join('')}</select>
+      ${spools.length && PG.ui.tab !== 'spools' ? `<select class="inp" id="pgSpool"><option value="ALL">All spools</option>${spools.map(s => `<option value="${esc(s)}" ${PG.ui.spool === s ? 'selected' : ''}>Spool ${esc(s)}</option>`).join('')}</select>` : ''}
+      ${PG.ui.tab === 'joints' ? `<select class="inp" id="pgLoc"><option value="ALL">Shop + Field</option><option value="SHOP" ${PG.ui.loc === 'SHOP' ? 'selected' : ''}>Shop</option><option value="FIELD" ${PG.ui.loc === 'FIELD' ? 'selected' : ''}>Field</option></select>` : ''}
+      <select class="inp" id="pgSt">${stOpts.map(o => `<option value="${o[0]}" ${PG.ui.stf === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>
+      <div class="search pgsearch">${icon('search')}<input id="pgQ" placeholder="Joint" value="${esc(PG.ui.q)}" enterkeyhint="search"></div>
+      <button class="btn sm" data-a="pgall">Select all (${rows.length})</button></div>
+    <div class="pglist">${rows.map(it => `<button class="pgrow ${PG.ui.sel.has(it.id) ? 'sel' : ''}" data-pgr="${esc(it.id)}">
+        <span class="pgck">${icon('check')}</span>
+        <span class="pgn"><b>${esc(it.kind === 'SPOOL' ? 'Spool ' + it.spool : it.joint || it.tag)}</b><small>${esc(it.iso || '')}${it.spool && it.kind !== 'SPOOL' ? ' · SP' + esc(it.spool) : ''}${it.nd ? ' · ' + it.nd + '"' : ''}${it.type ? ' · ' + esc(it.type) : ''}${it.loc ? ' · ' + (it.loc === 'FIELD' ? 'FIELD' : 'SHOP') : ''}${it.value ? ' · ' + esc(it.value) : ''}${it.desc && it.kind === 'OTHER' ? ' · ' + esc(it.desc) : ''}</small>${pgInShop(p, it) ? '<small class="pgwarn">spool in shop</small>' : ''}</span>
+        <span class="pgcs">${chips(it)}</span></button>`).join('') || '<div class="hint">Nothing to show with these filters.</div>'}</div>`;
+}
+
+/* ---------------- events ---------------- */
+async function pgClick(e) {
+  if (e.target.closest('#pgmap')) return;
+  if (e.target.closest('input,select,label')) return;
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const d = b.dataset, p = pgCur();
+  if (d.pgp) { PG.ui.pid = d.pgp; PG.ui.sel = new Set(); PG.ui.iso = 'ALL'; PG.ui.spool = 'ALL'; PG.ui.q = ''; render(); return; }
+  if (d.pgt) { PG.ui.tab = d.pgt; PG.ui.sel = new Set(); PG.ui.stf = 'ALL'; PG.ui.spool = 'ALL'; render(); return; }
+  if (d.pgr) { if (PG.ui.sel.has(d.pgr)) PG.ui.sel.delete(d.pgr); else PG.ui.sel.add(d.pgr); pgRefresh(); return; }
+  if (d.pgm) { PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => x.classList.toggle('sel', x === b)); return; }
+  if (d.pgmark) {
+    const date = PG.ui.date || todayStr();
+    if (date > todayStr()) { UI.toast('The date cannot be in the future.', 'err'); return; }
+    if (!S.sup) { UI.toast('Choose the supervisor first (Settings).', 'err'); return; }
+    const r = pgMark(p, Array.from(PG.ui.sel), d.pgmark);
+    PG.ui.sel = new Set(); await pgSave(); render();
+    UI.toast(`${pgLabel(p, d.pgmark)}: ${r.done} marked${r.skip ? ` · ${r.skip} skipped` : ''}${r.blocked ? ` · ${r.blocked} blocked (${d.pgmark === 'SHIP' ? 'shop joints pending' : 'spool in shop'})` : ''}.`, r.done ? 'ok' : 'err');
+    return;
+  }
+  switch (d.a) {
+    case 'pgback': ui.mode = ''; render(); break;
+    case 'pgimport': pgImport(); break;
+    case 'pgundo': pgUndo(); break;
+    case 'send': sendToAdmin(); break;
+    case 'settings': openSettings(false); break;
+    case 'pgclear': PG.ui.sel = new Set(); pgRefresh(); break;
+    case 'pgzin': pgZoom(p, 1 / 1.5); break;
+    case 'pgzout': pgZoom(p, 1.5); break;
+    case 'pgzall': PG.ui.vb[p.id] = null; pgRedraw(p); break;
+    case 'pgall': {
+      const ids = Array.from(document.querySelectorAll('[data-pgr]')).map(r => r.dataset.pgr);
+      const all = ids.length && ids.every(id => PG.ui.sel.has(id));
+      ids.forEach(id => { if (all) PG.ui.sel.delete(id); else PG.ui.sel.add(id); }); pgRefresh(); break;
+    }
+    case 'pgbacksel': {
+      const items = pgSelItems(p).filter(it => pgDone(p, it) >= 0);
+      const order = ['GOU', 'FIT', 'WEL', 'TST', 'DONE', 'SHIP', 'INST', 'TRQ', 'INS', 'PLS', 'PLN'];
+      const st = Array.from(new Set(items.flatMap(it => pgStages(it)))).sort((a, c) => order.indexOf(a) - order.indexOf(c));
+      const opts = [['', 'Pending (remove all marks)']].concat(st.slice(0, -1).map(s => [s, `Keep up to ${pgLabel(p, s)}`]));
+      const m = UI.modal(`<h3>Back to…</h3><p class="msub">${items.length} item(s). The office sees the change when you send.</p>
+        <div class="pgopts2">${opts.map(o => `<button class="btn" data-k="${o[0]}">${esc(o[1])}</button>`).join('')}</div>
+        <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button></div>`, { locked: true });
+      m.addEventListener('click', async ev => { const bb = ev.target.closest('[data-k],[data-x]'); if (!bb) return; UI.close(); if (bb.dataset.x) return;
+        const n = pgBack(p, items.map(i => i.id), bb.dataset.k); PG.ui.sel = new Set(); await pgSave(); render(); UI.toast(`${n} item(s) changed.`, 'ok'); });
+      break;
+    }
+  }
+}
+function pgChange(e) {
+  const t = e.target;
+  if (t.id === 'pgIso') { PG.ui.iso = t.value; PG.ui.spool = 'ALL'; render(); }
+  else if (t.id === 'pgSpool') { PG.ui.spool = t.value; render(); }
+  else if (t.id === 'pgLoc') { PG.ui.loc = t.value; render(); }
+  else if (t.id === 'pgSt') { PG.ui.stf = t.value; render(); }
+  else if (t.id === 'pgDate') { PG.ui.date = t.value; pgRefresh(); }
+  else if (t.id === 'pgCrew') { PG.ui.crew = t.value; }
+  else if (t.id === 'pgQ') { PG.ui.q = t.value; render(); }
+}
+function pgKey(e) {
+  const t = e.target;
+  if (t.id === 'pgFind' && e.key === 'Enter') {
+    const p = pgCur(); const q = t.value.trim().toUpperCase(); if (!q) return;
+    const it = p.items.find(i => i.id.toUpperCase() === q) || p.items.find(i => i.id.toUpperCase().includes(q));
+    if (!it || !it.pts) { UI.toast(pgDome(p) ? 'Strip not found.' : 'Piece not found.', 'err'); return; }
+    const xs = it.pts.map(c => c[0]), ys = it.pts.map(c => -c[1]), cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const z = pgDome(p) ? Math.max(18, p.geo.D * 0.22) : 44;
+    PG.ui.vb[p.id] = [cx - z / 2, cy - z / 2, z, z]; PG.ui.sel.add(it.id); render(); UI.toast(`${it.id} selected.`, 'ok');
+  }
+  if (t.id === 'pgQ' && e.key === 'Enter') { PG.ui.q = t.value; render(); }
+}
+document.addEventListener('change', e => { if (ui.mode === 'progress') pgChange(e); });
+document.addEventListener('keydown', e => { if (ui.mode === 'progress') pgKey(e); });
 </script>
 </body></html>
