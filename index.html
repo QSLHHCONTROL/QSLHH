@@ -440,6 +440,12 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgdll.off button{width:auto;min-height:30px;font-size:12px;color:var(--muted);border-style:dashed}
 @media (orientation:landscape) and (max-height:560px){.modal{padding:14px 16px}.pgstps{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}.modal h3{margin-top:0}}
 .pgstp .lb b{white-space:nowrap}
+
+.pgbl{position:absolute;left:10px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:5;display:flex;gap:8px;flex-wrap:wrap;max-width:calc(100% - 150px)}
+.pgbl.hid{display:none}
+.pgblb{min-height:46px;border-radius:23px;border:1.5px solid #C9C6DB;background:#fff;color:var(--q);font-weight:800;font-size:14px;padding:0 16px;box-shadow:0 3px 10px rgba(28,11,91,.15);white-space:nowrap}
+.pgblb.warn{border-color:#FF6A00;background:#FFF1E6;color:#C24E00}
+.pgblb.off{color:#8C86B8;border-style:dashed;font-weight:700}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -858,7 +864,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.4.2';
+const APP_VERSION = '2.4.3';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -3272,12 +3278,13 @@ function pgRender(root) {
   if (pgIsMap(p)) {     /* map: whole screen, best with the phone turned */
     root.innerHTML = `<div class="app pgapp pgmapmode">
       <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgprojects">⇆ Projects</button>
-        <div class="pgmt"><b>${pgDome(p) ? 'Dome' : 'Tank'} · ${esc(p.name)}</b><span>${h.pct.toFixed(1)}% · ${esc(h.txt)}</span></div>${pgDlChips(p)}${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
+        <div class="pgmt"><b>${pgDome(p) ? 'Dome' : 'Tank'} · ${esc(p.name)}</b><span>${h.pct.toFixed(1)}% · ${esc(h.txt)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
       <div class="pgstage"><div class="pgmap" id="pgmapbox">${pgMapSvg(p)}</div>
         <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
         <div class="pgmode" id="pgmode">${PG_MODE[PG.ui.mode] || ''}</div>
         <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button><button class="pgfab" data-a="pgfind" aria-label="Find">${icon('search')}</button><button class="pgfab ${PG.ui.leg ? 'on' : ''}" data-a="pgleg" aria-label="Legend">?</button></div>
         ${PG.ui.leg ? `<div class="pglegend pgpop">${pgLegend(p)}</div>` : ''}
+        <div class="pgbl">${pgDome(p) ? '<button class="pgblb" data-a="pgrolls">🧻 Rolls</button>' : ''}${pgDlBtn(p)}</div>
         <button class="pgsendfab" data-a="send">${icon('send')} Send${pgPending() + pending() ? ` <span class="badge">${pgPending() + pending()}</span>` : ''}</button>
         ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The map is bigger with the phone sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}
       </div>${pgBar(p)}</div>`;
@@ -3296,11 +3303,11 @@ const PG_ICON = {
   pan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>'
 };
 const PG_MODE = { tap: 'Mode: Tap · touch a strip or node', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the map' };
-/* day log / rolls buttons: small, only what applies */
-function pgDlChips(p) {
-  if (!pgDlOn(p)) return `<button class="pgpj sm" data-a="pgdl" aria-label="Day log">📋</button>`;
+/* map: Day log button bottom left (Rolls is always there in a dome, it does not depend on the day log) */
+function pgDlBtn(p) {
+  if (!pgDlOn(p)) return '<button class="pgblb off" data-a="pgdl">📋 Day log off</button>';
   const d = pgDay(p, PG.ui.date || todayStr());
-  return `<button class="pgpj sm ${d ? '' : 'warn'}" data-a="pgdl">📋 ${d ? `${d.fit}F · ${d.wel}W` : 'Day log'}</button>${pgDome(p) ? '<button class="pgpj sm" data-a="pgrolls">🧻 Rolls</button>' : ''}`;
+  return `<button class="pgblb ${d ? '' : 'warn'}" data-a="pgdl">📋 ${d ? `${d.fit} fitters · ${d.wel} welders · ${d.h} h` : 'Day log'}</button>`;
 }
 /* piping: one thin line under the name (only the icon when the day log is off) */
 function pgDlLine(p) {
@@ -3338,6 +3345,7 @@ function pgRefresh() {
   } else document.querySelectorAll('[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (it) el.setAttribute('fill', PG.ui.sel.has(it.id) ? PG_SEL : pgColor(p, it)); });
   document.querySelectorAll('[data-pgr]').forEach(r => r.classList.toggle('sel', PG.ui.sel.has(r.dataset.pgr)));
   const sf = document.querySelector('.pgsendfab'); if (sf) sf.classList.toggle('hid', PG.ui.sel.size > 0);
+  const bl = document.querySelector('.pgbl'); if (bl) bl.classList.toggle('hid', PG.ui.sel.size > 0);
 }
 
 /* ----- tank map ----- */
