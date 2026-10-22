@@ -493,6 +493,24 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgsidesend .ic{width:17px;height:17px}
 .pgisoapp .pglist2{padding-bottom:8px}
 .pgwhy{display:flex;gap:6px;flex-wrap:wrap}.pgwhy button{min-height:42px;padding:0 14px;border-radius:12px;border:1.5px solid #C9C6DB;background:#fff;font-weight:800;color:var(--q)}.pgwhy button.on{background:#D61F8C;border-color:#D61F8C;color:#fff}
+
+/* piping: clean screens */
+.pgtabs2{display:flex;gap:6px;overflow-x:auto;margin:8px 0 10px;padding-bottom:2px;scrollbar-width:none}.pgtabs2::-webkit-scrollbar{display:none}
+.pgtabs2 button{flex:1 0 auto;min-height:42px;padding:0 16px;border-radius:14px;border:1.5px solid #C9C6DB;background:#fff;font-weight:800;font-size:13px;color:var(--q);white-space:nowrap}
+.pgtabs2 button.on{background:var(--q);border-color:var(--q);color:#fff}
+.pgchips{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}
+.pgchips button{min-height:34px;padding:0 12px;border-radius:12px;border:1.5px solid #C9C6DB;background:#fff;font-weight:800;font-size:12px;color:var(--q);white-space:nowrap}
+.pgchips button.on{background:#EFEDF7;border-color:var(--q)}
+.pgside .pgsideh .pgchips{margin:0;flex:1}.pgside .pgsideh .pgchips button{min-height:30px;padding:0 9px;font-size:11px}
+.pgsq{width:18px;height:18px;border-radius:5px;border:1.5px solid #1C0B5B;flex:none}
+.pgst{display:inline-block;border-radius:9px;padding:3px 8px;font-size:11px;font-weight:800;white-space:nowrap}
+.pgjr .c{white-space:nowrap}
+.pgchips{flex:none;align-items:flex-start;align-content:flex-start}.pgchips button{height:34px;flex:none}
+.pgtabs2{flex-wrap:wrap;overflow:visible}.pgtabs2 button{flex:1 1 auto}
+.pgisoapp .pgsheet .pgsrow{flex-wrap:wrap;row-gap:6px}
+.pgisoapp .pgsheet .pgbtns{flex-wrap:wrap}.pgisoapp .pgsheet .pgbtns .btn{flex:1 1 auto;min-width:96px}
+.pgisoapp .pgcrew{flex-direction:row;align-items:center;font-size:11px}.pgisoapp .pgcrew .inp{width:120px;min-height:40px}
+@media (orientation:landscape){.pgisoapp .pgcrew{font-size:0}.pgisoapp .pgcrew .inp{font-size:15px}}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -911,7 +929,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.6.3';
+const APP_VERSION = '2.6.4';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -1939,6 +1957,11 @@ function pgMarks(p) {
     else if (m[x.item] && x.stage === 'PNT') { delete m[x.item].PNT; if (!Object.keys(m[x.item]).length) delete m[x.item]; }
     else if (m[x.item]) { const k = st.indexOf(x.stage); st.forEach((s, i) => { if (i >= k) delete m[x.item][s]; }); if (it.kind === 'JOINT' && !m[x.item].WEL) delete m[x.item].PNT; if (!Object.keys(m[x.item]).length) delete m[x.item]; }
   });
+  /* a shipped spool is installed by itself when all its field joints are welded */
+  p.items.forEach(sp => { if (sp.kind !== 'SPOOL') return; const ms = m[sp.id]; if (!ms || !ms.SHIP || ms.INST) return;
+    const F = p.items.filter(i => i.kind === 'JOINT' && i.iso === sp.iso && i.spool === sp.spool && i.loc === 'FIELD'); if (!F.length) return;
+    let d = ''; for (const i of F) { const w = (m[i.id] || {}).WEL; if (!w) return; if (w.date > d) d = w.date; }
+    ms.INST = { date: d > ms.SHIP.date ? d : ms.SHIP.date, by: 'auto', auto: true }; });
   PG.cache[p.id] = m;
   return m;
 }
@@ -1952,9 +1975,9 @@ const pgSpoolOf = (p, it) => it.spool ? p.items.find(x => x.id === `S|${it.iso}|
 const pgInShop = (p, it) => { if (it.kind !== 'JOINT' || it.loc !== 'FIELD' || !it.spool) return false; const sp = pgSpoolOf(p, it); return !!sp && !pgM(p, sp).SHIP; };
 function pgSpoolInfo(p, sp) {
   const J = p.items.filter(i => i.kind === 'JOINT' && i.iso === sp.iso && i.spool === sp.spool);
-  const shop = J.filter(i => i.loc === 'SHOP'), sw = shop.filter(i => pgM(p, i).WEL);
+  const shop = J.filter(i => i.loc === 'SHOP'), sw = shop.filter(i => pgM(p, i).WEL), fd = J.filter(i => i.loc === 'FIELD');
   const ready = shop.length === sw.length, m = pgM(p, sp);
-  return { shop: shop.length, shopW: sw.length, ready, status: m.INST ? 'Installed' : m.SHIP ? 'Shipped' : ready ? 'Ready' : 'In shop' };
+  return { shop: shop.length, shopW: sw.length, field: fd.length, fieldW: fd.filter(i => pgM(p, i).WEL).length, ready, status: m.INST ? 'Installed' : m.SHIP ? 'Shipped' : ready ? 'Ready' : 'In shop' };
 }
 const pgName = it => it.kind === 'JOINT' || it.kind === 'THREAD' ? `${it.spool ? 'SP' + it.spool + ' · ' : ''}${it.joint}` : it.kind === 'TORQUE' ? `${it.spool ? 'SP' + it.spool + ' · ' : ''}${it.tag}` : it.kind === 'SPOOL' ? `Spool ${it.spool}` : it.kind === 'OTHER' ? it.tag : it.id;
 const pgQty = (p, it) => pgRep(p) ? (it.ft || 0) : (it.kind === 'JOINT' || it.kind === 'THREAD') ? (it.nd || 0) : 1;
@@ -1976,6 +1999,7 @@ function pgMark(p, ids, stage) {
     if (!it || pgNext(p, it) !== stage) { skip++; return; }
     if (pgInShop(p, it)) { blocked++; return; }
     if (it.kind === 'SPOOL' && stage === 'SHIP' && !pgSpoolInfo(p, it).ready) { blocked++; return; }
+    if (it.kind === 'SPOOL' && stage === 'INST' && pgSpoolInfo(p, it).field) { blocked++; return; }   /* it goes by itself with its field joints */
     PG.S.marks.push({ uid: uid(), batch, at: new Date().toISOString(), pid: p.id, item: id, stage, act: 'SET', date, by: S.sup || '', crew: p.type === 'PIPING' && it.kind === 'JOINT' ? PG.ui.crew.trim() : '', sent: false });
     PG.cache = null; done++;
   });
@@ -2171,6 +2195,8 @@ function pgBar(p) {
     if (pgIsoMode(p)) return pgIsoBar(p);
     if (PG.ui.act === 'SUP') return pgZoneBar(p);
     if (PG.ui.act === 'HYD') return pgHydBar(p);
+    if (['SPOOLS', 'TRQ', 'OTHER'].includes(PG.ui.act)) return pgItemBar(p);
+    return '<div class="pgsheet" id="pgbar"></div>';
   }
   const items = pgSelItems(p);
   const qty = {}; items.forEach(it => { const u = pgUnit(p, it); qty[u] = (qty[u] || 0) + pgQty(p, it); });
@@ -2385,8 +2411,11 @@ async function pgClick(e) {
   const d = b.dataset, p = pgCur();
   if (d.pglock) { pgCodeModal(pgProj(d.pglock)); return; }
   if (d.st && p) { const i = document.getElementById(d.st); if (i) { const v = Math.max(0, Math.min(Number(i.dataset.max), (Number(i.value) || 0) + Number(d.d))); i.value = String(Math.round(v * 2) / 2); } return; }
-  if (d.pgact) { PG.ui.act = d.pgact; PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); PG.ui.done = false; PG.ui.iso = 'ALL'; PG.ui.spool = 'ALL'; PG.ui.stf = d.pgact === 'SPOOLS' ? 'Ready' : 'ALL'; render(); return; }
-  if (d.pgiso) { PG.ui.isoV = d.pgiso; PG.ui.perSpool = false; PG.ui.sel = new Set(); PG.ui.done = false; render(); return; }
+  if (d.pgact) { PG.ui.act = d.pgact; PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); PG.ui.done = false; PG.ui.iso = 'ALL'; PG.ui.spool = 'ALL'; PG.ui.stf = d.pgact === 'SPOOLS' ? 'Ready' : 'ALL'; PG.ui.f = 'todo'; render(); return; }
+  if (d.pgf) { PG.ui.f = d.pgf; PG.ui.sel = new Set(); render(); return; }
+  if (d.pgst) { PG.ui.stf = d.pgst; PG.ui.sel = new Set(); render(); return; }
+  if (d.pgb && p) { if (pgIsoMode(p)) pgIsoBack(p, d.pgb); else pgItemBack(p, d.pgb); return; }
+  if (d.pgiso) { PG.ui.isoV = d.pgiso; PG.ui.sel = new Set(); PG.ui.f = 'todo'; render(); return; }
   if (d.za) { PG.ui.zAct = d.za; pgRefresh(); return; }
   if (d.pgr && d.ro && p) { const t = (p.tps || []).find(x => 'TP|' + x.id === d.pgr), s = t && pgTpStatus(p, t); UI.toast(s && s.st === 'TESTED' ? 'Already tested. Only the office can change it.' : `Not ready: ${s ? s.left : ''} joint(s) still to weld.`, 'err'); return; }
   if (d.pgr && /^(ZN|TP)\|/.test(d.pgr)) { PG.ui.sel = PG.ui.sel.has(d.pgr) ? new Set() : new Set([d.pgr]); pgRefresh(); return; }
@@ -2411,8 +2440,6 @@ async function pgClick(e) {
     case 'pgprojects': PG.ui.pid = ''; PG.ui.sel = new Set(); PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.perSpool = false; render(); break;
     case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
     case 'pgisos': PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
-    case 'pgspool': PG.ui.perSpool = !PG.ui.perSpool; PG.ui.sel = new Set(); render(); break;
-    case 'pgisoback': pgIsoBackModal(p); break;
     case 'pgzsave': pgZoneSave(p); break;
     case 'pghydsave': pgHydSave(p); break;
     case 'pgsettings': pgSettings(); break;
@@ -2641,81 +2668,87 @@ function pgSettings() {
   });
 }
 
-/* ---------------- what the supervisor does today (only the activities the office turned on) ---------------- */
+/* ---------------- piping: ISOMETRICS · SPOOLS · and what the office turns on (torque, supports, hydro, other) ---------------- */
+const pgCfg = p => Array.isArray(p.acts) && p.acts.length > 0;
+const pgOn = (p, k) => !pgCfg(p) || p.acts.includes(k);
+const pgPaintJ = p => pgCfg(p) && p.acts.includes('PAINT') && p.paint !== 'SPOOL';
+const pgPaintS = p => pgCfg(p) && p.acts.includes('PAINT') && p.paint === 'SPOOL';
+const pgTrqOn = p => p.items.some(i => i.kind === 'TORQUE') && pgOn(p, 'TRQ');
 function pgActs(p) {
-  const a = Array.isArray(p.acts) && p.acts.length ? p.acts : null, has = k => !a || a.includes(k);
-  const J = p.items.some(i => i.kind === 'JOINT' || i.kind === 'THREAD');
   const out = [];
-  if (J && (has('FIT_SHOP') || has('FIT_FIELD'))) out.push(['FIT', 'FIT-UP', PG_STG.FIT]);
-  if (J && (has('WEL_SHOP') || has('WEL_FIELD'))) out.push(['WEL', 'WELD', PG_STG.WEL]);
-  if (a && a.includes('PAINT') && p.paint !== 'SPOOL' && J) out.push(['PNTJ', 'PAINT', PG_STG.PNT]);
-  if (p.items.some(i => i.kind === 'SPOOL')) out.push(['SPOOLS', 'SPOOLS', PG_STG.SHIP]);
-  if (a && a.includes('PAINT') && p.paint === 'SPOOL') out.push(['PNTS', 'PAINT', PG_STG.PNT]);
-  if (p.items.some(i => i.kind === 'TORQUE') && has('TRQ')) out.push(['TRQ', 'TORQUE', PG_STG.TRQ]);
-  if ((p.zones || []).length && (has('SUP_FAB') || has('SUP_INS'))) out.push(['SUP', 'SUPPORTS', { color: '#8E5CD9', ink: '#fff' }]);
-  if ((p.tps || []).length && has('HYDRO')) out.push(['HYD', 'HYDRO', { color: '#0B6E99', ink: '#fff' }]);
-  if (p.items.some(i => i.kind === 'OTHER') && has('OTHER')) out.push(['OTHER', 'OTHER', PG_STG.INS]);
+  if (p.items.some(i => i.kind === 'JOINT')) out.push(['ISO', 'ISOMETRICS']);
+  if (p.items.some(i => i.kind === 'SPOOL')) out.push(['SPOOLS', 'SPOOLS']);
+  if (pgTrqOn(p)) out.push(['TRQ', 'TORQUE']);
+  if ((p.zones || []).length && (pgOn(p, 'SUP_FAB') || pgOn(p, 'SUP_INS'))) out.push(['SUP', 'SUPPORTS']);
+  if ((p.tps || []).length && pgOn(p, 'HYDRO')) out.push(['HYD', 'HYDRO']);
+  if (p.items.some(i => i.kind === 'OTHER') && pgOn(p, 'OTHER')) out.push(['OTHER', 'OTHER']);
   return out;
 }
-const pgJointMode = () => ['FIT', 'WEL', 'PNTJ'].includes(PG.ui.act);
-const pgModeStage = () => PG.ui.act === 'PNTJ' ? 'PNT' : PG.ui.act;
-const pgIsoMode = p => p && !pgIsMap(p) && pgJointMode() && !!PG.ui.isoV && !PG.ui.perSpool;
+const pgIsoMode = p => !!p && !pgIsMap(p) && PG.ui.act === 'ISO' && !!PG.ui.isoV;
 const pgDwx = p => p && p.dwx && PG.ui.isoV ? p.dwx['ISO:' + PG.ui.isoV] || null : null;
 const pgVK = p => p.id + (pgIsoMode(p) ? '|' + PG.ui.isoV : '');
 
-/* joints of an ISO, one row per joint of the weld list (all its spools together) */
-function pgIsoJoints(p, iso) {
-  const map = new Map();
-  p.items.filter(i => i.kind === 'JOINT' && i.iso === iso).forEach(i => {
-    if (!map.has(i.joint)) map.set(i.joint, { key: 'JK|' + iso + '|' + i.joint, joint: i.joint, nd: i.nd, type: i.type, loc: i.loc, items: [] });
-    map.get(i.joint).items.push(i);
+/* one group per joint (or flange) of the weld list: all its spools together */
+function pgGroups(p, iso, kind) {
+  const map = new Map(), pre = kind === 'TORQUE' ? 'FK|' : 'JK|';
+  p.items.filter(i => i.kind === kind && i.iso === iso).forEach(i => {
+    const nm = kind === 'TORQUE' ? i.tag : i.joint;
+    if (!map.has(nm)) map.set(nm, { key: pre + iso + '|' + nm, kind, joint: nm, nd: i.nd, type: kind === 'TORQUE' ? (i.desc || 'Flange') : i.type, loc: i.loc, items: [] });
+    map.get(nm).items.push(i);
   });
   return Array.from(map.values()).map(g => {
     g.items.sort((a, b) => cmpStr(a.spool || '', b.spool || ''));
     const M = g.items.map(i => pgM(p, i));
-    g.ea = g.items.length; g.fit = M.filter(m => m.FIT).length; g.wel = M.filter(m => m.WEL).length; g.pnt = M.filter(m => m.PNT).length;
-    g.rep = M.reduce((a, m) => a + (m.R || []).length, 0); g.shop = g.items.filter(i => pgInShop(p, i)).length;
+    g.ea = g.items.length; g.fit = M.filter(m => m.FIT).length; g.wel = M.filter(m => m.WEL).length; g.pnt = M.filter(m => m.PNT).length; g.trq = M.filter(m => m.TRQ).length;
+    g.rep = M.reduce((a, m) => a + (m.R || []).length, 0); g.shop = g.items.filter(i => pgInShop(p, i)).length; g.lock = g.items.some(i => pgLocked(p, i));
     return g;
   });
 }
+const pgIsoJoints = (p, iso) => pgGroups(p, iso, 'JOINT');
+const pgIsoAll = (p, iso) => pgIsoJoints(p, iso).concat(pgTrqOn(p) ? pgGroups(p, iso, 'TORQUE') : []);
 function pgAvail(p, g, stage) {
-  return g.items.filter(i => stage === 'PNT' || stage === 'REP' ? pgCanX(p, i, stage) && !(stage === 'REP' && pgLocked(p, i)) : pgNext(p, i) === stage && !pgInShop(p, i));
+  if (stage === 'PNT' || stage === 'REP') return g.items.filter(i => pgCanX(p, i, stage) && !(stage === 'REP' && pgLocked(p, i)));
+  return g.items.filter(i => pgNext(p, i) === stage && !pgInShop(p, i));
 }
-const pgIsoGroup = (p, key) => { const [, iso, ...j] = key.split('|'); return pgIsoJoints(p, iso).find(g => g.joint === j.join('|')); };
+/* back for a group: the last spools first */
+function pgBackList(p, g, kind) {
+  const ok = i => !pgLocked(p, i), M = i => pgM(p, i);
+  const L = kind === 'B_PNT' ? g.items.filter(i => M(i).PNT) : kind === 'B_FIT' ? g.items.filter(i => M(i).WEL) : g.items.filter(i => M(i).FIT || M(i).TRQ);
+  return L.filter(ok).reverse();
+}
+const pgIsoGroup = (p, key) => { const [pre, iso, ...j] = key.split('|'); return (pre === 'FK' ? pgGroups(p, iso, 'TORQUE') : pgIsoJoints(p, iso)).find(g => g.joint === j.join('|')); };
+const pgTodo = (p, g) => g.kind === 'TORQUE' ? pgAvail(p, g, 'TRQ').length > 0 : ['FIT', 'WEL'].concat(pgPaintJ(p) ? ['PNT'] : []).some(s => pgAvail(p, g, s).length);
 
 /* ---------------- ISO picker ---------------- */
 function pgIsoPicker(p) {
   const isoL = Array.from(new Set(p.items.filter(i => i.kind === 'JOINT').map(i => i.iso))).sort(cmpStr);
-  const st = pgModeStage();
-  return `<div class="pgsub2">Choose isometric</div><div class="pgpick">${isoL.map(iso => {
+  return `<div class="pgpick">${isoL.map(iso => {
     const G = pgIsoJoints(p, iso), ea = new Set(G.flatMap(g => g.items.map(i => i.spool))).size;
-    const nd = (g, k) => g.items.filter(i => k(pgM(p, i))).reduce((a, i) => a + (i.nd || 0), 0), tot = G.reduce((a, g) => a + g.items.reduce((b, i) => b + (i.nd || 0), 0), 0);
-    const f = pgPct(G.reduce((a, g) => a + nd(g, m => m.FIT), 0), tot), w = pgPct(G.reduce((a, g) => a + nd(g, m => m.WEL), 0), tot), pn = pgPct(G.reduce((a, g) => a + nd(g, m => m.PNT), 0), tot);
-    const left = G.reduce((a, g) => a + pgAvail(p, g, st).length, 0);
-    return `<button class="pgcard" data-pgiso="${esc(iso)}"><span class="r1"><b class="n" style="font-size:18px">${esc(iso)} <small class="pgsm2">· ${ea} spool${ea === 1 ? '' : 's'}</small></b><b class="pc" style="font-size:13px;text-align:right"><span style="color:#B38F00">FIT ${f.toFixed(0)}%</span><br><span style="color:#2E9D5B">WELD ${w.toFixed(0)}%</span>${PG.ui.act === 'PNTJ' ? `<br><span style="color:#6E7FA3">PAINT ${pn.toFixed(0)}%</span>` : ''}</b></span>
-      <span class="s">${p.dwx && p.dwx['ISO:' + iso] ? '🗺 drawing' : '☰ list (no drawing)'} · ${left ? `<b>${left} to ${st === 'FIT' ? 'fit' : st === 'WEL' ? 'weld' : 'paint'}</b>` : 'nothing pending'}</span>
+    const nd = k => G.reduce((a, g) => a + g.items.filter(i => k(pgM(p, i))).reduce((b, i) => b + (i.nd || 0), 0), 0), tot = G.reduce((a, g) => a + g.items.reduce((b, i) => b + (i.nd || 0), 0), 0);
+    const f = pgPct(nd(m => m.FIT), tot), w = pgPct(nd(m => m.WEL), tot);
+    const tf = G.reduce((a, g) => a + pgAvail(p, g, 'FIT').length, 0), tw = G.reduce((a, g) => a + pgAvail(p, g, 'WEL').length, 0);
+    return `<button class="pgcard" data-pgiso="${esc(iso)}"><span class="r1"><b class="n" style="font-size:18px">${esc(iso)} <small class="pgsm2">· ${ea} spool${ea === 1 ? '' : 's'}${p.dwx && p.dwx['ISO:' + iso] ? ' · 🗺' : ''}</small></b><b class="pc" style="font-size:13px;text-align:right"><span style="color:#B38F00">FIT ${f.toFixed(0)}%</span><br><span style="color:#2E9D5B">WELD ${w.toFixed(0)}%</span></b></span>
+      <span class="s">${tf || tw ? `${tf ? `<b>${tf}</b> to fit-up` : ''}${tf && tw ? ' · ' : ''}${tw ? `<b>${tw}</b> to weld` : ''}` : 'nothing pending'}</span>
       <span class="pgpbar"><i style="width:${Math.min(100, w)}%;background:${PG_STG.WEL.color}"></i></span></button>`; }).join('') || '<div class="hint">No joints.</div>'}</div>`;
 }
-/* one row of the joint list (side panel or full list) */
-function pgJRow(p, g, locked) {
-  const st = pgModeStage(), sel = PG.ui.sel.has(g.key);
-  const c = st === 'PNT' ? `${g.pnt}/${g.ea}` : st === 'WEL' ? `${g.wel}/${g.ea}` : `${g.fit}/${g.ea}`;
-  return `<button class="pgjr ${sel ? 'sel' : ''}" data-pgr="${esc(g.key)}"><span class="pgpie" style="background:${pgPieCss(g)}"></span><b>${esc(g.joint)}</b><span class="d">${g.nd ? g.nd + '"' : ''} ${esc(g.type || '')}${g.loc === 'FIELD' ? ' · FIELD' : ''}${g.rep ? ` · <b class="pgr1">R${g.rep}</b>` : ''}${locked ? ' · 🔒' : ''}</span><span class="c">${c}</span></button>`;
+/* one row of the joint list */
+function pgStWord(g) {
+  if (g.kind === 'TORQUE') return g.ea > 1 ? `T ${g.trq}/${g.ea}` : g.trq ? 'torqued' : 'to torque';
+  if (g.ea > 1) return `F ${g.fit}/${g.ea} · W ${g.wel}/${g.ea}`;
+  return g.pnt ? 'painted' : g.wel ? 'welded' : g.fit ? 'fitted' : g.shop ? 'in shop' : 'to fit-up';
 }
-const pgPieCss = g => { const w = g.wel / g.ea * 100, f = g.fit / g.ea * 100, pn = g.pnt / g.ea * 100;
-  return PG.ui.act === 'PNTJ' ? `conic-gradient(${PG_STG.PNT.color} 0 ${pn}%, ${PG_STG.WEL.color} ${pn}% ${w}%, #fff ${w}% 100%)` : `conic-gradient(${PG_STG.WEL.color} 0 ${w}%, ${PG_STG.FIT.color} ${w}% ${f}%, #fff ${f}% 100%)`; };
-function pgIsoRows(p) {
-  const st = pgModeStage();
-  const G = pgIsoJoints(p, PG.ui.isoV);
-  const rows = G.filter(g => PG.ui.done || pgAvail(p, g, st).length || (st === 'WEL' && PG.ui.sel.has(g.key)));
-  return { G, rows };
+function pgJRow(p, g) {
+  const sel = PG.ui.sel.has(g.key);
+  const ic = g.kind === 'TORQUE' ? `<span class="pgsq" style="background:linear-gradient(to top, ${PG_STG.TRQ.color} ${g.trq / g.ea * 100}%, #fff ${g.trq / g.ea * 100}%)"></span>` : `<span class="pgpie" style="background:${pgPieCss(p, g)}"></span>`;
+  return `<button class="pgjr ${sel ? 'sel' : ''}" data-pgr="${esc(g.key)}">${ic}<b>${esc(g.joint)}</b><span class="d">${g.nd ? g.nd + '"' : ''} ${esc(g.type || '')}${g.loc === 'FIELD' ? ' · FIELD' : ''}${g.rep ? ` · <b class="pgr1">R${g.rep}</b>` : ''}${g.lock ? ' · 🔒' : ''}</span><span class="c">${pgStWord(g)}</span></button>`;
 }
-/* the isometric with its bubbles: each bubble is a small pie (green welded, yellow fitted, white to do) */
+const pgPieCss = (p, g) => { const w = g.wel / g.ea * 100, f = g.fit / g.ea * 100, pn = g.pnt / g.ea * 100;
+  return pgPaintJ(p) ? `conic-gradient(${PG_STG.PNT.color} 0 ${pn}%, ${PG_STG.WEL.color} ${pn}% ${w}%, ${PG_STG.FIT.color} ${w}% ${f}%, #fff ${f}% 100%)` : `conic-gradient(${PG_STG.WEL.color} 0 ${w}%, ${PG_STG.FIT.color} ${w}% ${f}%, #fff ${f}% 100%)`; };
 /* the bubbles alone (the drawing is loaded once; moving or touching only redraws this) */
 function pgIsoBubs(p) {
   const d = pgDwx(p); if (!d) return '';
   const vb = PG.ui.vb[pgVK(p)] || pgBox(p), R = d.w / 80 * (d.bs || 1), zoomed = vb[2] < d.w * 0.45;
-  const G = pgIsoJoints(p, PG.ui.isoV), byJ = new Map(G.map(g => [g.joint, g]));
+  const G = pgIsoAll(p, PG.ui.isoV), byJ = new Map(); G.forEach(g => { if (!byJ.has(g.joint) || g.kind === 'JOINT') byJ.set(g.joint, g); });
   const wedge = (a0, a1, col) => { if (a1 - a0 <= 0.0001) return ''; if (a1 - a0 >= 0.9999) return `<circle r="${R}" fill="${col}"/>`;
     const p0 = [R * Math.sin(2 * Math.PI * a0), -R * Math.cos(2 * Math.PI * a0)], p1 = [R * Math.sin(2 * Math.PI * a1), -R * Math.cos(2 * Math.PI * a1)];
     return `<path d="M0,0 L${p0[0]},${p0[1]} A${R},${R} 0 ${a1 - a0 > 0.5 ? 1 : 0} 1 ${p1[0]},${p1[1]} Z" fill="${col}"/>`; };
@@ -2723,12 +2756,17 @@ function pgIsoBubs(p) {
   Object.entries(d.mk || {}).forEach(([j, xy]) => {
     const g = byJ.get(j); if (!g) return;
     const x = xy[0] * d.w, y = xy[1] * d.h, sel = PG.ui.sel.has(g.key);
+    const txt = (fill, sz) => `<text y="${R * 0.36}" font-size="${R * sz}" font-family="Arial" font-weight="700" text-anchor="middle" fill="${fill}" stroke="${fill === '#fff' ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.7)'}" stroke-width="${R / 14}" paint-order="stroke" pointer-events="none">${esc(g.joint)}</text>`;
+    const cnt = v => zoomed ? `<text y="${R * 1.85}" font-size="${R * 0.62}" font-family="Arial" font-weight="800" text-anchor="middle" fill="#1C0B5B" stroke="#fff" stroke-width="${R / 6}" paint-order="stroke" pointer-events="none">${v}</text>` : '';
+    if (g.kind === 'TORQUE') {
+      const t = g.trq / g.ea, a = R * 0.9;
+      out.push(`<g data-pc="${esc(g.key)}" transform="translate(${x},${y})"><rect x="${-a}" y="${-a}" width="${2 * a}" height="${2 * a}" rx="${a / 4}" fill="#fff"/>${t > 0 ? `<rect x="${-a}" y="${a - 2 * a * t}" width="${2 * a}" height="${2 * a * t}" rx="${a / 4}" fill="${PG_STG.TRQ.color}"/>` : ''}<rect x="${-a}" y="${-a}" width="${2 * a}" height="${2 * a}" rx="${a / 4}" fill="none" stroke="${sel ? PG_SEL : '#1C0B5B'}" stroke-width="${sel ? R / 2.6 : R / 7}"/>${txt('#1C0B5B', g.joint.length > 3 ? 0.55 : 0.75)}${cnt(`T ${g.trq}/${g.ea}`)}</g>`);
+      return;
+    }
     const w = g.wel / g.ea, f = g.fit / g.ea, pn = g.pnt / g.ea, rep = g.rep && g.wel < g.ea;
-    const pie = PG.ui.act === 'PNTJ' ? wedge(0, pn, PG_STG.PNT.color) + wedge(pn, w, PG_STG.WEL.color) : wedge(0, w, PG_STG.WEL.color) + wedge(w, f, PG_STG.FIT.color);
-    const ink = (PG.ui.act === 'PNTJ' ? pn : w) >= 0.5 ? '#fff' : '#1C0B5B';
+    const pie = pgPaintJ(p) ? wedge(0, pn, PG_STG.PNT.color) + wedge(pn, w, PG_STG.WEL.color) + wedge(w, f, PG_STG.FIT.color) : wedge(0, w, PG_STG.WEL.color) + wedge(w, f, PG_STG.FIT.color);
     out.push(`<g data-pc="${esc(g.key)}" transform="translate(${x},${y})"><circle r="${R}" fill="#fff"/>${pie}<circle class="bo" r="${R}" fill="none" stroke="${sel ? PG_SEL : rep ? PG_STG.REP.color : '#1C0B5B'}" stroke-width="${sel ? R / 2.6 : rep ? R / 3.5 : R / 7}" ${g.shop && !g.fit ? `stroke-dasharray="${R / 3} ${R / 4}"` : ''}/>
-      <text y="${R * 0.36}" font-size="${R * (g.joint.length > 3 ? 0.62 : 0.85)}" font-family="Arial" font-weight="700" text-anchor="middle" fill="${ink}" stroke="${ink === '#fff' ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.7)'}" stroke-width="${R / 14}" paint-order="stroke" pointer-events="none">${esc(g.joint)}</text>
-      ${zoomed ? `<text y="${R * 1.85}" font-size="${R * 0.62}" font-family="Arial" font-weight="800" text-anchor="middle" fill="#1C0B5B" stroke="#fff" stroke-width="${R / 6}" paint-order="stroke" pointer-events="none">${PG.ui.act === 'PNTJ' ? g.pnt : PG.ui.act === 'WEL' ? g.wel : g.fit}/${g.ea}${g.rep ? ' R' + g.rep : ''}</text>` : ''}</g>`);
+      ${txt(w >= 0.5 ? '#fff' : '#1C0B5B', g.joint.length > 3 ? 0.62 : 0.85)}${cnt(`${g.ea > 1 ? `${g.wel}/${g.ea}` : g.wel ? '✓' : g.fit ? 'F' : ''}${g.rep ? ' R' + g.rep : ''}`)}</g>`);
   });
   return out.join('');
 }
@@ -2737,61 +2775,53 @@ function pgIsoSvg(p) {
   const vb = PG.ui.vb[pgVK(p)] || pgBox(p);
   return `<svg xmlns="http://www.w3.org/2000/svg" id="pgmap" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet"><image href="${d.img}" x="0" y="0" width="${d.w}" height="${d.h}"/><g id="pgbubs">${pgIsoBubs(p)}</g></svg>`;
 }
-/* update in place: view box + bubbles (true when it could) */
 function pgIsoRedraw(p) {
   const svg = document.getElementById('pgmap'), g = document.getElementById('pgbubs');
   if (!svg || !g) return false;
   svg.setAttribute('viewBox', (PG.ui.vb[pgVK(p)] || pgBox(p)).join(' ')); g.innerHTML = pgIsoBubs(p); return true;
 }
-/* the joint list: in WELD the welded joints stay below, ready for a repair */
+/* the joint list: "To do" (default) or "All" */
 function pgIsoListHtml(p) {
-  const st = pgModeStage(), G = pgIsoJoints(p, PG.ui.isoV);
-  if (st === 'WEL') {
-    const toW = G.filter(g => pgAvail(p, g, 'WEL').length || (PG.ui.sel.has(g.key) && !g.wel)), done = G.filter(g => g.wel > 0);
-    const lk = g => g.items.some(i => pgLocked(p, i));
-    return { n: toW.length, html: `<div class="pgsec">TO WELD · ${toW.length}</div>${toW.map(g => pgJRow(p, g)).join('') || '<div class="hint">Nothing to weld here.</div>'}
-      <div class="pgsec">WELDED · repair · ${done.length}</div>${done.map(g => pgJRow(p, g, lk(g))).join('') || '<div class="hint">No welded joints yet.</div>'}` };
-  }
-  const rows = G.filter(g => PG.ui.done || pgAvail(p, g, st).length || PG.ui.sel.has(g.key));
-  return { n: G.filter(g => pgAvail(p, g, st).length).length, all: true, html: rows.map(g => pgJRow(p, g)).join('') || `<div class="hint">${PG.ui.done ? 'No joints.' : 'Nothing pending here. Tap All.'}</div>` };
+  const G = pgIsoAll(p, PG.ui.isoV), todo = G.filter(g => pgTodo(p, g)), all = PG.ui.f === 'all';
+  const rows = all ? G : G.filter(g => pgTodo(p, g) || PG.ui.sel.has(g.key));
+  return { n: todo.length, chips: `<div class="pgchips"><button class="${all ? '' : 'on'}" data-pgf="todo">To do · ${todo.length}</button><button class="${all ? 'on' : ''}" data-pgf="all">All · ${G.length}</button></div>`,
+    html: rows.map(g => pgJRow(p, g)).join('') || `<div class="hint">${all ? 'No joints.' : 'Nothing to do here. Tap All to see the done ones.'}</div>` };
 }
 function pgIsoView(p) {      /* like the dome: the drawing rules; the joint list opens and closes */
   const L = pgIsoListHtml(p), ea = new Set(pgIsoJoints(p, PG.ui.isoV).flatMap(g => g.items.map(i => i.spool))).size;
-  const act = pgActs(p).find(a => a[0] === PG.ui.act) || ['', ''];
-  const ttl = PG.ui.act === 'WEL' ? 'WELD' : PG.ui.act === 'PNTJ' ? 'TO PAINT' : 'TO FIT-UP';
   return `<div class="app pgapp pgmapmode pgisoapp">
     <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgisos">⇆ ISOs</button>
-      <div class="pgmt"><b>${esc(PG.ui.isoV)} · ${act[1]}</b><span>${ea} spool${ea === 1 ? '' : 's'} · ${esc(p.name)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
+      <div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${ea} spool${ea === 1 ? '' : 's'} · ${esc(p.name)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
     <div class="pgstage pgisost"><div class="pgisol"><div class="pgmap" id="pgmapbox">${pgIsoSvg(p)}</div>
         <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
         <div class="pgmode" id="pgmode">${PG_MODE_ISO[PG.ui.mode] || ''}</div>
         <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button></div>
-        <div class="pglegline"><span><i style="background:#fff"></i>to do</span><span><i style="background:${PG_STG.FIT.color}"></i>fit-up</span><span><i style="background:${PG_STG.WEL.color}"></i>welded</span>${PG.ui.act === 'PNTJ' ? `<span><i style="background:${PG_STG.PNT.color}"></i>painted</span>` : ''}<span><i style="background:#fff;border:1.5px solid ${PG_STG.REP.color}"></i>repair</span><span><i style="background:#fff;border-style:dashed"></i>spool in shop</span></div>
+        <div class="pglegline"><span><i style="background:#fff"></i>to do</span><span><i style="background:${PG_STG.FIT.color}"></i>fit-up</span><span><i style="background:${PG_STG.WEL.color}"></i>welded</span>${pgPaintJ(p) ? `<span><i style="background:${PG_STG.PNT.color}"></i>painted</span>` : ''}${pgTrqOn(p) ? `<span><i style="background:${PG_STG.TRQ.color};border-radius:3px"></i>torque</span>` : ''}<span><i style="background:#fff;border:1.5px solid ${PG_STG.REP.color}"></i>repair</span><span><i style="background:#fff;border-style:dashed"></i>in shop</span></div>
         ${PG.ui.jl ? '' : `<button class="pgjtab" data-a="pgjl">Joints ◂ <b>${L.n}</b></button>`}
         ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The drawing is bigger sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}</div>
-      ${PG.ui.jl ? `<div class="pgside"><div class="pgsideh"><span>${ttl}${PG.ui.act === 'WEL' ? '' : ` · ${L.n}`}</span><span class="pgsh2">${L.all ? `<button class="pgtg ${PG.ui.done ? 'on' : ''}" data-a="pgdone">${PG.ui.done ? '✓ ' : ''}All</button>` : ''}<button class="pgtg" data-a="pgspool" title="Every spool apart">☰</button><button class="pgtg" data-a="pgjl" aria-label="Close the list">✕</button></span></div>
-        <div class="pglist2">${L.html}</div>
-</div>` : ''}
+      ${PG.ui.jl ? `<div class="pgside"><div class="pgsideh">${L.chips}<button class="pgtg" data-a="pgjl" aria-label="Close the list">✕</button></div><div class="pglist2">${L.html}</div></div>` : ''}
     </div>${pgBar(p)}</div>`;
 }
-const PG_MODE_ISO = { tap: 'Mode: Tap · touch a bubble', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the drawing' };
+const PG_MODE_ISO = { tap: 'Mode: Tap · touch a joint', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the drawing' };
 function pgIsoList(p) {        /* no drawing: the joint list alone */
   const G = pgIsoJoints(p, PG.ui.isoV), L = pgIsoListHtml(p), ea = new Set(G.flatMap(g => g.items.map(i => i.spool))).size;
-  return `<div class="pgisoh"><button class="pgpj" data-a="pgisos">⇆ ISOs</button><div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${ea} spool${ea === 1 ? '' : 's'} · no drawing</span></div><button class="pgpj sm" data-a="pgspool">☰ Per spool</button></div>
-    ${L.all ? `<div class="pgcount"><span>${PG.ui.done ? 'All joints' : `Only <b>${PG.ui.act === 'PNTJ' ? 'to paint' : 'to fit-up'}</b>`} · ${L.n} of ${G.length}</span><button class="pgtg ${PG.ui.done ? 'on' : ''}" data-a="pgdone">${PG.ui.done ? '✓ ' : ''}Show done</button></div>` : ''}
-    <div class="pglist2 full">${L.html}</div>`;
+  return `<div class="pgisoh"><button class="pgpj" data-a="pgisos">⇆ ISOs</button><div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${ea} spool${ea === 1 ? '' : 's'} · no drawing</span></div></div>
+    ${L.chips}<div class="pglist2 full">${L.html}</div>`;
 }
+/* the sheet of a joint: only the buttons that apply, one tap each */
+const PG_FWD = [['FIT', 'Fit-up ✓'], ['WEL', 'Weld ✓'], ['PNT', 'Painted ✓'], ['TRQ', 'Torque ✓'], ['REP', 'Repair']];
+const PG_BK = [['B_PNT', '← No paint'], ['B_FIT', '← Fit-up'], ['B_PEN', '← Pending']];
 function pgIsoBar(p) {
-  const st = pgModeStage(), G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean);
-  const nA = s => G.reduce((a, g) => a + pgAvail(p, g, s).length, 0);
-  const one = G.length === 1 ? G[0] : null;
-  const btn = (s, l) => { const n = nA(s); return `<button class="btn" data-pgmark="${s}" ${n ? '' : 'disabled'} style="${n ? `background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}` : ''}">${l}${n ? '' : ''}</button>`; };
-  const btns = st === 'PNT' ? btn('PNT', 'Painted ✓') : st === 'WEL' ? btn('WEL', 'Weld ✓') + btn('REP', 'Repair') : btn('FIT', 'Fit-up ✓');
+  const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean), one = G.length === 1 ? G[0] : null;
+  const fwd = PG_FWD.filter(([s]) => s !== 'PNT' || pgPaintJ(p)).map(([s, l]) => [s, l, G.reduce((a, g) => a + pgAvail(p, g, s).length, 0)]).filter(x => x[2]);
+  const bk = PG_BK.filter(([k]) => k !== 'B_PNT' || pgPaintJ(p)).map(([k, l]) => [k, l, G.reduce((a, g) => a + (g.kind === 'TORQUE' && k !== 'B_PEN' ? 0 : pgBackList(p, g, k).length), 0)]).filter(x => x[2]);
+  const crew = fwd.some(x => x[0] === 'FIT' || x[0] === 'WEL');
+  const why = one && !fwd.length ? (one.shop ? 'Spool still in shop (not shipped).' : one.lock ? 'Locked: hydro test done (only the office can change it).' : '') : '';
   return `<div class="pgsheet ${G.length ? 'on' : ''}" id="pgbar"><div class="grab"></div>
-    <div class="pgsrow"><div class="pgsum"><b>${one ? `Joint ${esc(one.joint)} · ${one.nd ? one.nd + '"' : ''} ${esc(one.type || '')}` : `${G.length} joints`}</b><span>${one ? `fit ${one.fit}/${one.ea} · weld ${one.wel}/${one.ea}${one.pnt ? ` · paint ${one.pnt}/${one.ea}` : ''}${one.rep ? ` · ${one.rep} repair(s)` : ''}${one.shop ? ` · ${one.shop} spool(s) in shop` : ''}` : G.map(g => esc(g.joint)).join(', ')}</span></div>
-      ${st !== 'PNT' ? `<label class="pgcrew">${st === 'WEL' ? 'Welder stamp' : 'Fitter initials'} (optional)<input id="pgCrew" class="inp" value="${esc(PG.ui.crew)}" placeholder="${st === 'WEL' ? 'W-12' : 'JR / MP'}"></label>` : ''}
-      <div class="pgbtns">${btns}</div>
-      <div class="pgbtns2"><button class="btn ghost" data-a="pgisoback" ${G.some(g => g.fit || g.pnt) ? '' : 'disabled'}>Back to…</button><button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
+    <div class="pgsrow"><div class="pgsum"><b>${one ? `${one.kind === 'TORQUE' ? 'Flange' : 'Joint'} ${esc(one.joint)} · ${one.nd ? one.nd + '"' : ''} ${esc(one.type || '')}` : `${G.length} selected`}</b><span>${one ? `${one.ea > 1 ? one.ea + ' spools · ' : ''}${pgStWord(one)}${one.rep ? ` · ${one.rep} repair(s)` : ''}` : G.map(g => esc(g.joint)).join(', ')}${why ? ` · <b>${why}</b>` : ''}</span></div>
+      ${crew ? `<label class="pgcrew">Fitter / welder (optional)<input id="pgCrew" class="inp" value="${esc(PG.ui.crew)}" placeholder="Crew: JR · W-12"></label>` : ''}
+      <div class="pgbtns">${fwd.map(([s, l]) => `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}</button>`).join('')}</div>
+      <div class="pgbtns2">${bk.map(([k, l]) => `<button class="btn ghost" data-pgb="${k}">${l}</button>`).join('')}<button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
 }
 const PG_REP_WHY = `<p class="msub">The joint goes back to "to weld". It does not add inch-dia again; the repair is counted apart.</p>
   <div class="mlabel">REASON</div><div class="pgwhy">${['RT', 'UT', 'Visual', 'PT', 'Other'].map(w => `<button class="${w === 'RT' ? 'on' : ''}" data-why="${w}">${w}</button>`).join('')}</div>
@@ -2825,30 +2855,73 @@ async function pgIsoMark(p, stage) {
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean);
   const av = G.map(g => pgAvail(p, g, stage)), max = Math.max(0, ...av.map(a => a.length));
   if (!max) return;
-  const label = stage === 'FIT' ? 'Fit-up ✓' : stage === 'WEL' ? 'Weld ✓' : stage === 'PNT' ? 'Painted ✓' : 'Repair';
-  const r = await pgQtyAsk(`${label} · ${G.length === 1 ? 'joint ' + esc(G[0].joint) : G.length + ' joints'}`, max,
-    stage === 'REP' ? PG_REP_WHY : (G.length > 1 && max > 1 ? '<p class="msub">The number applies to each selected joint.</p>' : ''));
+  const label = (PG_FWD.find(x => x[0] === stage) || [0, stage])[1];
+  const r = await pgQtyAsk(`${label} · ${G.length === 1 ? esc(G[0].joint) : G.length + ' selected'}`, max,
+    stage === 'REP' ? PG_REP_WHY : (G.length > 1 && max > 1 ? '<p class="msub">The number applies to each one.</p>' : ''));
   if (!r) return;
   PG.ui.repWhy = r.why || '';
-  const ids = av.flatMap(a => a.slice(0, r.n).map(i => i.id));
-  const res = pgMark(p, ids, stage);
+  const res = pgMark(p, av.flatMap(a => a.slice(0, r.n).map(i => i.id)), stage);
   PG.ui.sel = new Set(); await pgSave(); render();
-  UI.toast(`${label}: ${res.done} spool-joint(s) marked${res.blocked ? ` · ${res.blocked} blocked` : ''}.`, res.done ? 'ok' : 'err');
+  UI.toast(`${label}: ${res.done} marked${res.blocked ? ` · ${res.blocked} blocked` : ''}.`, res.done ? 'ok' : 'err');
 }
-async function pgIsoBackModal(p) {
+async function pgIsoBack(p, kind) {
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean);
-  const opts = [['PNT', 'Remove paint', g => g.items.filter(i => pgM(p, i).PNT)], ['WEL', 'Remove weld (keep fit-up)', g => g.items.filter(i => pgM(p, i).WEL && !pgM(p, i).PNT)], ['FIT', 'Remove fit-up', g => g.items.filter(i => pgM(p, i).FIT && !pgM(p, i).WEL)]]
-    .map(o => [o[0], o[1], G.map(g => o[2](g).filter(i => !pgLocked(p, i)).reverse())]).filter(o => o[2].some(a => a.length));
-  if (!opts.length) { UI.toast('Nothing to undo here (tested packages are locked).', 'err'); return; }
-  const m = UI.modal(`<h3>Back to…</h3><p class="msub">The last spools are undone first. The office sees it when you send.</p><div class="pgopts2">${opts.map(o => `<button class="btn" data-k="${o[0]}">${o[1]} · ${Math.max(...o[2].map(a => a.length))} available</button>`).join('')}</div><div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button></div>`, { locked: true });
-  m.addEventListener('click', async e => {
-    const b = e.target.closest('[data-k],[data-x]'); if (!b) return; UI.close(); if (b.dataset.x) return;
-    const o = opts.find(x => x[0] === b.dataset.k), max = Math.max(...o[2].map(a => a.length));
-    const r = await pgQtyAsk(o[1], max); if (!r) return;
-    const ids = o[2].flatMap(a => a.slice(0, r.n).map(i => i.id));
-    const n = pgBack(p, ids, o[0] === 'PNT' ? '-PNT' : o[0] === 'WEL' ? 'FIT' : '');
-    PG.ui.sel = new Set(); await pgSave(); render(); UI.toast(`${n} spool-joint(s) changed.`, 'ok');
-  });
+  const L = G.map(g => g.kind === 'TORQUE' && kind !== 'B_PEN' ? [] : pgBackList(p, g, kind)), max = Math.max(0, ...L.map(a => a.length));
+  if (!max) return;
+  const label = (PG_BK.find(x => x[0] === kind) || [0, ''])[1];
+  const r = await pgQtyAsk(`${label} · ${G.length === 1 ? esc(G[0].joint) : G.length + ' selected'}`, max, '<p class="msub">To correct a mistake. The last spools are undone first.</p>');
+  if (!r) return;
+  const n = pgBack(p, L.flatMap(a => a.slice(0, r.n).map(i => i.id)), kind === 'B_PNT' ? '-PNT' : kind === 'B_FIT' ? 'FIT' : '');
+  PG.ui.sel = new Set(); await pgSave(); render(); UI.toast(`${n} changed.`, 'ok');
+}
+
+/* ---------------- spools, torque and other items: grouped by ISO ---------------- */
+function pgSpools(p) {
+  const st = PG.ui.stf || 'Ready', SP = p.items.filter(i => i.kind === 'SPOOL'), info = new Map(SP.map(s => [s.id, pgSpoolInfo(p, s)]));
+  const cnt = k => SP.filter(s => k === 'ALL' || info.get(s.id).status === k).length;
+  const rows = SP.filter(s => st === 'ALL' || info.get(s.id).status === st || PG.ui.sel.has(s.id)).sort((a, b) => cmpStr(a.iso, b.iso) || cmpStr(a.spool, b.spool));
+  const col = { 'In shop': ['#E3E1EC', '#1C0B5B'], Ready: [PG_STG.FIT.color, PG_STG.FIT.ink], Shipped: [PG_STG.SHIP.color, '#fff'], Installed: [PG_STG.INST.color, '#fff'] };
+  let last = '';
+  return `<div class="pgchips">${[['Ready', 'Ready to ship'], ['Shipped', 'Shipped'], ['Installed', 'Installed'], ['In shop', 'In shop'], ['ALL', 'All']].map(([k, l]) => `<button class="${st === k ? 'on' : ''}" data-pgst="${k}">${l} · ${cnt(k)}</button>`).join('')}</div>
+    <div class="pglist2 full">${rows.map(s => { const i = info.get(s.id), c = col[i.status], h = s.iso !== last ? `<div class="pgsec">${esc(s.iso)}</div>` : ''; last = s.iso;
+      return h + `<button class="pgjr ${PG.ui.sel.has(s.id) ? 'sel' : ''}" data-pgr="${esc(s.id)}"><span class="pgsq" style="background:${c[0]}"></span><b>SP${esc(s.spool)}</b><span class="d">shop ${i.shopW}/${i.shop}${i.field ? ` · field ${i.fieldW}/${i.field}` : ''}${pgM(p, s).PNT ? ' · painted' : ''}</span><span class="c"><span class="pgst" style="background:${c[0]};color:${c[1]}">${i.status}</span></span></button>`; }).join('') || '<div class="hint">No spools here.</div>'}</div>`;
+}
+function pgSimple(p, kind) {
+  const st = kind === 'TORQUE' ? 'TRQ' : 'INS', all = PG.ui.f === 'all', L = p.items.filter(i => i.kind === kind);
+  const todo = i => pgNext(p, i) === st, rows = L.filter(i => all || todo(i) || PG.ui.sel.has(i.id)).sort((a, b) => cmpStr(a.iso || '', b.iso || '') || cmpStr(a.spool || '', b.spool || '') || cmpStr(a.tag || '', b.tag || ''));
+  let last = '';
+  return `<div class="pgchips"><button class="${all ? '' : 'on'}" data-pgf="todo">To do · ${L.filter(todo).length}</button><button class="${all ? 'on' : ''}" data-pgf="all">All · ${L.length}</button></div>
+    <div class="pglist2 full">${rows.map(i => { const h = (i.iso || '') !== last ? `<div class="pgsec">${esc(i.iso || '—')}</div>` : ''; last = i.iso || ''; const dn = !!pgM(p, i)[st];
+      return h + `<button class="pgjr ${PG.ui.sel.has(i.id) ? 'sel' : ''}" data-pgr="${esc(i.id)}"><span class="pgsq" style="background:${dn ? PG_STG[st].color : '#fff'}"></span><b>${esc(i.tag)}</b><span class="d">${i.spool ? 'SP' + esc(i.spool) + ' · ' : ''}${i.nd ? i.nd + '" · ' : ''}${esc(i.value || i.desc || '')}</span><span class="c">${dn ? (kind === 'TORQUE' ? 'torqued' : 'installed') : 'to do'}</span></button>`; }).join('') || `<div class="hint">${all ? 'Nothing here.' : 'All done. Tap All.'}</div>`}</div>`;
+}
+/* the sheet of spools / flanges / other items */
+function pgItemBar(p) {
+  const items = pgSelItems(p);
+  const sp = items.filter(i => i.kind === 'SPOOL'), inf = new Map(sp.map(s => [s.id, pgSpoolInfo(p, s)]));
+  const fwd = [], bk = [];
+  if (sp.length) {
+    fwd.push(['SHIP', 'Shipped ✓', sp.filter(s => inf.get(s.id).status === 'Ready').length]);
+    fwd.push(['INST', 'Installed ✓', sp.filter(s => inf.get(s.id).status === 'Shipped' && !inf.get(s.id).field).length]);
+    if (pgPaintS(p)) fwd.push(['PNT', 'Painted ✓', sp.filter(s => pgCanX(p, s, 'PNT')).length]);
+    bk.push(['B_SHIP', '← Not shipped', sp.filter(s => pgM(p, s).SHIP).length]);
+    if (pgPaintS(p)) bk.push(['B_PNT', '← No paint', sp.filter(s => pgM(p, s).PNT).length]);
+  }
+  ['TORQUE', 'OTHER'].forEach(k => { const L = items.filter(i => i.kind === k), s = k === 'TORQUE' ? 'TRQ' : 'INS';
+    if (L.length) { fwd.push([s, k === 'TORQUE' ? 'Torque ✓' : 'Installed ✓', L.filter(i => pgNext(p, i) === s).length]); bk.push(['B_PEN', '← Pending', L.filter(i => pgM(p, i)[s]).length]); } });
+  const F = fwd.filter(x => x[2]), B = bk.filter(x => x[2]);
+  const auto = sp.some(s => inf.get(s.id).status === 'Shipped' && inf.get(s.id).field) ? 'Installed goes by itself when its field joints are welded.' : sp.some(s => inf.get(s.id).status === 'In shop') ? 'Ready goes by itself when its shop joints are welded.' : '';
+  return `<div class="pgsheet ${items.length ? 'on' : ''}" id="pgbar"><div class="grab"></div>
+    <div class="pgsrow"><div class="pgsum"><b>${items.length === 1 ? esc(sp.length ? `${items[0].iso} · SP${items[0].spool}` : items[0].tag) : `${items.length} selected`}</b><span>${sp.length === 1 ? inf.get(sp[0].id).status : ''}${auto ? ` · ${auto}` : ''}</span></div>
+      <div class="pgbtns">${F.map(([s, l, n]) => `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` (${n})` : ''}</button>`).join('')}</div>
+      <div class="pgbtns2">${B.map(([k, l]) => `<button class="btn ghost" data-pgb="${k}">${l}</button>`).join('')}<button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
+}
+async function pgItemBack(p, kind) {
+  const items = pgSelItems(p);
+  const ids = kind === 'B_SHIP' ? items.filter(i => i.kind === 'SPOOL' && pgM(p, i).SHIP) : kind === 'B_PNT' ? items.filter(i => pgM(p, i).PNT) : items.filter(i => i.kind !== 'SPOOL');
+  if (!ids.length) return;
+  if (!await UI.confirm('Correct', `${(PG_BK.concat([['B_SHIP', '← Not shipped']]).find(x => x[0] === kind) || [0, ''])[1]} · ${ids.length} item(s)?`, 'Yes')) return;
+  const n = pgBack(p, ids.map(i => i.id), kind === 'B_PNT' ? '-PNT' : '');
+  PG.ui.sel = new Set(); await pgSave(); render(); UI.toast(`${n} changed.`, 'ok');
 }
 
 /* ---------------- supports by zone ---------------- */
@@ -2860,7 +2933,7 @@ function pgZoneCounts(p, z) {      /* a support added in the field counts once t
   return { planned: (Number(z.planned) || 0) + sum('ADD', e => e.st === 'OK'), fab: sum('FAB', () => true), ins: sum('INS', () => true), pend: sum('ADD', e => e.st === 'PENDING') };
 }
 function pgZones(p) {
-  return `<div class="pgsub2">Supports by zone</div><div class="pgpick">${(p.zones || []).map(z => { const c = pgZoneCounts(p, z), key = 'ZN|' + z.id;
+  return `<div class="pgpick">${(p.zones || []).map(z => { const c = pgZoneCounts(p, z), key = 'ZN|' + z.id;
     return `<button class="pgcard ${PG.ui.sel.has(key) ? 'sel' : ''}" data-pgr="${esc(key)}"><span class="r1"><b class="n" style="font-size:17px">${esc(z.name)}${z.desc ? ` · <small class="pgsm2">${esc(z.desc)}</small>` : ''}</b><b class="pc" style="font-size:14px">${c.planned} pcs</b></span>
       <span class="s">Fabricated <b>${c.fab}</b> · Installed <b>${c.ins}</b>${c.pend ? ` · <b style="color:#C24E00">+${c.pend} waiting office</b>` : ''}</span>
       <span class="pgpbar"><i style="width:${Math.min(100, pgPct(c.ins, c.planned))}%;background:#8E5CD9"></i></span></button>`; }).join('')}</div>`;
@@ -2886,7 +2959,7 @@ async function pgZoneSave(p) {
 
 /* ---------------- hydrostatic test packages ---------------- */
 function pgHydro(p) {
-  return `<div class="pgsub2">Hydrostatic test</div><div class="pgpick">${(p.tps || []).map(t => { const s = pgTpStatus(p, t), key = 'TP|' + t.id;
+  return `<div class="pgpick">${(p.tps || []).map(t => { const s = pgTpStatus(p, t), key = 'TP|' + t.id;
     const tag = s.st === 'TESTED' ? '<span class="pgtag" style="background:#4FC3F7;color:#0B3A52">TESTED</span>' : s.st === 'READY' ? '<span class="pgtag" style="background:#2E9D5B;color:#fff">READY</span>' : `<span class="pgtag">${s.left} joint(s) to weld</span>`;
     const tt = t.tested || (PG.S.hyd || []).find(h => h.pid === p.id && h.tp === t.id);
     return `<button class="pgcard ${PG.ui.sel.has(key) ? 'sel' : ''}" data-pgr="${esc(key)}" ${s.st === 'READY' ? '' : 'data-ro="1"'}><span class="r1"><b class="n" style="font-size:17px">${esc(t.name)}</b>${tag}</span>
@@ -2910,16 +2983,10 @@ async function pgHydSave(p) {
 /* ---------------- piping screen ---------------- */
 function pgPipingNew(p) {
   const acts = pgActs(p);
-  if (!acts.some(a => a[0] === PG.ui.act)) { PG.ui.act = (acts[0] || [''])[0]; PG.ui.isoV = ''; PG.ui.perSpool = false; }
-  const bar = `<div class="pgjm"><span>TODAY I DO</span><div class="pgacts">${acts.map(([k, l, c]) => `<button class="${PG.ui.act === k ? 'on' : ''}" data-pgact="${k}" style="${PG.ui.act === k ? `background:${c.color};border-color:${c.color};color:${c.ink}` : ''}">${l}</button>`).join('')}</div></div>`;
-  let body = '';
-  if (pgJointMode()) {
-    if (PG.ui.perSpool && PG.ui.isoV) { PG.ui.tab = 'joints'; PG.ui.iso = PG.ui.isoV; body = `<div class="pgisoh"><button class="pgpj" data-a="pgspool">⇦ ${esc(PG.ui.isoV)}</button><div class="pgmt"><b>Per spool</b><span>every spool apart</span></div></div>` + pgPiping(p, true); }
-    else if (PG.ui.isoV) body = pgIsoList(p);
-    else body = pgIsoPicker(p);
-  } else if (PG.ui.act === 'SUP') body = pgZones(p);
-  else if (PG.ui.act === 'HYD') body = pgHydro(p);
-  else { PG.ui.tab = { SPOOLS: 'spools', PNTS: 'spools', TRQ: 'torque', OTHER: 'other' }[PG.ui.act] || 'joints'; body = pgPiping(p, true); }
+  if (!acts.some(a => a[0] === PG.ui.act)) { PG.ui.act = (acts[0] || [''])[0]; PG.ui.isoV = ''; }
+  const bar = acts.length > 1 ? `<div class="pgtabs2">${acts.map(([k, l]) => `<button class="${PG.ui.act === k ? 'on' : ''}" data-pgact="${k}">${l}</button>`).join('')}</div>` : '';
+  const body = PG.ui.act === 'ISO' ? (PG.ui.isoV ? pgIsoList(p) : pgIsoPicker(p)) : PG.ui.act === 'SPOOLS' ? pgSpools(p) : PG.ui.act === 'TRQ' ? pgSimple(p, 'TORQUE')
+    : PG.ui.act === 'OTHER' ? pgSimple(p, 'OTHER') : PG.ui.act === 'SUP' ? pgZones(p) : PG.ui.act === 'HYD' ? pgHydro(p) : '';
   return bar + body;
 }
 
