@@ -1,6 +1,6 @@
 {
- "name": "QSL Man-Hours Supervisor",
- "short_name": "QSL HH",
+ "name": "QSL Progress",
+ "short_name": "QSL Progress",
  "start_url": "./index.html",
  "scope": "./",
  "display": "standalone",
