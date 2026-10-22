@@ -477,7 +477,22 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgpie{width:20px;height:20px;border-radius:50%;border:1.5px solid #1C0B5B;flex:none}
 @media (orientation:portrait){.pgstage.pgisost{flex-direction:column}.pgside{max-width:none;min-width:0;flex:0 0 38%;border-left:none;border-top:1.5px solid #E3E1EC}}
 .pgmapmode .pgmt{min-width:90px}
-@media (orientation:portrait){.pgmapmode .pgmtop .ep{display:none}.pgmapmode .pgmtop .pgdate{font-size:11px}}
+@media (orientation:portrait){.pgmapmode .pgmtop{gap:6px;padding-left:8px;padding-right:8px}.pgmapmode .pgmtop .pgdate{font-size:11px;padding:0 8px}.pgmapmode .pgmtop .ep{height:24px}.pgmapmode .pgmtop .pgpj{padding:0 10px}}
+
+/* clean isometric (like the dome) */
+.pgisoapp .pgmtop{min-height:44px;padding-top:calc(4px + env(safe-area-inset-top));padding-bottom:4px}
+.pgisoapp .pgmode{top:8px}
+.pgjtab{position:absolute;right:0;top:58%;z-index:6;border:none;background:var(--q);color:#fff;font-weight:800;font-size:13px;border-radius:14px 0 0 14px;padding:14px 8px;writing-mode:vertical-rl;box-shadow:0 3px 10px rgba(28,11,91,.25)}
+.pgjtab b{writing-mode:horizontal-tb;background:#fff;color:var(--q);border-radius:9px;padding:1px 6px;margin-top:6px;font-size:12px}
+.pglegline{position:absolute;left:8px;bottom:8px;z-index:4;display:flex;gap:9px;flex-wrap:wrap;max-width:70%;background:rgba(255,255,255,.92);border-radius:10px;padding:4px 9px;font-size:11px;color:#4A4570}
+.pglegline i{display:inline-block;width:10px;height:10px;border-radius:50%;border:1.5px solid #1C0B5B;margin-right:4px;vertical-align:-1px}
+.pgsh2{display:flex;gap:5px}.pgsh2 .pgtg{min-height:32px;padding:0 9px}
+.pgsec{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.4px;margin:8px 4px 3px}
+.pgr1{color:#D61F8C}
+.pgsidesend{margin:6px;min-height:44px;border:none;border-radius:14px;background:var(--q);color:#fff;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;flex:none}
+.pgsidesend .ic{width:17px;height:17px}
+.pgisoapp .pglist2{padding-bottom:8px}
+.pgwhy{display:flex;gap:6px;flex-wrap:wrap}.pgwhy button{min-height:42px;padding:0 14px;border-radius:12px;border:1.5px solid #C9C6DB;background:#fff;font-weight:800;color:var(--q)}.pgwhy button.on{background:#D61F8C;border-color:#D61F8C;color:#fff}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -896,7 +911,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.6.3';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -2180,7 +2195,7 @@ function pgRefresh() {
   if (pgDome(p)) {
     document.querySelectorAll('[data-sv]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.sv); if (!it) return; const s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLS; el.setAttribute('stroke', s ? PG_SEL : dn ? PG_STG.PLS.color : PG_DPEND); el.setAttribute('stroke-width', el.dataset.w * (s ? 4.2 : dn ? 3.4 : 2)); });
     document.querySelectorAll('circle[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (!it) return; const s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLN; el.setAttribute('fill', s ? PG_SEL : dn ? PG_STG.PLN.color : '#FFFFFF'); el.setAttribute('stroke', s ? PG_SEL : dn ? PG_STG.PLN.color : '#8C86B8'); });
-  } else if (pgIsoMode(p)) { const box = document.getElementById('pgmapbox'); if (box) { box.innerHTML = pgIsoSvg(p); pgWireMap(); } }
+  } else if (pgIsoMode(p)) pgIsoRedraw(p);
   else document.querySelectorAll('[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (it) el.setAttribute('fill', PG.ui.sel.has(it.id) ? PG_SEL : pgColor(p, it)); });
   document.querySelectorAll('[data-pgr]').forEach(r => r.classList.toggle('sel', PG.ui.sel.has(r.dataset.pgr)));
   const sf = document.querySelector('.pgsendfab'); if (sf) sf.classList.toggle('hid', PG.ui.sel.size > 0);
@@ -2226,7 +2241,7 @@ function pgMapSvg(p) {
   out.push('</svg>');
   return out.join('');
 }
-function pgRedraw(p) { const b = document.getElementById('pgmapbox'); if (b) { b.innerHTML = pgMapSvg(p); pgWireMap(); } }
+function pgRedraw(p) { if (pgIsoMode(p) && pgIsoRedraw(p)) return; const b = document.getElementById('pgmapbox'); if (b) { b.innerHTML = pgMapSvg(p); pgWireMap(); } }
 function pgZoom(p, f) {
   const vb = (PG.ui.vb[pgVK(p)] || pgBox(p)).slice(), full = pgBox(p), cx = vb[0] + vb[2] / 2, cy = vb[1] + vb[3] / 2;
   const w = Math.min(full[2], Math.max(full[2] / 40, vb[2] * f)), k = w / vb[2];
@@ -2379,13 +2394,13 @@ async function pgClick(e) {
   if (d.pgt) { PG.ui.tab = d.pgt; PG.ui.sel = new Set(); PG.ui.stf = 'ALL'; PG.ui.spool = 'ALL'; render(); return; }
   if (d.pgjm) { PG.ui.jm = d.pgjm; PG.ui.sel = new Set(); render(); return; }
   if (d.pgr) { if (PG.ui.sel.has(d.pgr)) PG.ui.sel.delete(d.pgr); else PG.ui.sel.add(d.pgr); pgRefresh(); return; }
-  if (d.pgm) { PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = PG_MODE[d.pgm] || ''; return; }
+  if (d.pgm) { PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = (pgIsoMode(p) ? PG_MODE_ISO : PG_MODE)[d.pgm] || ''; return; }
   if (d.pgmark && pgIsoMode(p)) { pgIsoMark(p, d.pgmark); return; }
   if (d.pgmark) {
     const date = PG.ui.date || todayStr();
     if (date > todayStr()) { UI.toast('The date cannot be in the future.', 'err'); return; }
     if (!S.sup) { if (typeof askName === 'function') { if (!await askName(false)) return; } else { UI.toast('Choose the supervisor first (Settings).', 'err'); return; } }
-    if (d.pgmark === 'REP') { const q = await pgQtyAsk('Repair', 1, `<p class="msub">The joint goes back to "to weld". It does not add inch-dia again; the repair is counted apart.</p><div class="field"><label>Reason (optional: RT, UT, visual…)</label><input class="inp" id="qWhy"></div>`); if (!q) return; PG.ui.repWhy = q.why || ''; }
+    if (d.pgmark === 'REP') { const q = await pgQtyAsk('Repair', 1, PG_REP_WHY); if (!q) return; PG.ui.repWhy = q.why || ''; }
     const r = pgMark(p, Array.from(PG.ui.sel), d.pgmark);
     PG.ui.sel = new Set(); await pgSave(); render();
     UI.toast(`${pgLabel(p, d.pgmark)}: ${r.done} marked${r.skip ? ` · ${r.skip} skipped` : ''}${r.blocked ? ` · ${r.blocked} blocked (${d.pgmark === 'SHIP' ? 'shop joints pending' : 'spool in shop'})` : ''}.`, r.done ? 'ok' : 'err');
@@ -2394,6 +2409,7 @@ async function pgClick(e) {
   switch (d.a) {
     case 'pgback': ui.mode = ''; render(); break;
     case 'pgprojects': PG.ui.pid = ''; PG.ui.sel = new Set(); PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.perSpool = false; render(); break;
+    case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
     case 'pgisos': PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
     case 'pgspool': PG.ui.perSpool = !PG.ui.perSpool; PG.ui.sel = new Set(); render(); break;
     case 'pgisoback': pgIsoBackModal(p); break;
@@ -2681,10 +2697,10 @@ function pgIsoPicker(p) {
       <span class="pgpbar"><i style="width:${Math.min(100, w)}%;background:${PG_STG.WEL.color}"></i></span></button>`; }).join('') || '<div class="hint">No joints.</div>'}</div>`;
 }
 /* one row of the joint list (side panel or full list) */
-function pgJRow(p, g) {
+function pgJRow(p, g, locked) {
   const st = pgModeStage(), sel = PG.ui.sel.has(g.key);
   const c = st === 'PNT' ? `${g.pnt}/${g.ea}` : st === 'WEL' ? `${g.wel}/${g.ea}` : `${g.fit}/${g.ea}`;
-  return `<button class="pgjr ${sel ? 'sel' : ''}" data-pgr="${esc(g.key)}"><span class="pgpie" style="background:${pgPieCss(g)}"></span><b>${esc(g.joint)}</b><span class="d">${g.nd ? g.nd + '"' : ''} ${esc(g.type || '')}${g.loc === 'FIELD' ? ' · FIELD' : ''}${g.rep ? ` · R${g.rep}` : ''}</span><span class="c">${c}</span></button>`;
+  return `<button class="pgjr ${sel ? 'sel' : ''}" data-pgr="${esc(g.key)}"><span class="pgpie" style="background:${pgPieCss(g)}"></span><b>${esc(g.joint)}</b><span class="d">${g.nd ? g.nd + '"' : ''} ${esc(g.type || '')}${g.loc === 'FIELD' ? ' · FIELD' : ''}${g.rep ? ` · <b class="pgr1">R${g.rep}</b>` : ''}${locked ? ' · 🔒' : ''}</span><span class="c">${c}</span></button>`;
 }
 const pgPieCss = g => { const w = g.wel / g.ea * 100, f = g.fit / g.ea * 100, pn = g.pnt / g.ea * 100;
   return PG.ui.act === 'PNTJ' ? `conic-gradient(${PG_STG.PNT.color} 0 ${pn}%, ${PG_STG.WEL.color} ${pn}% ${w}%, #fff ${w}% 100%)` : `conic-gradient(${PG_STG.WEL.color} 0 ${w}%, ${PG_STG.FIT.color} ${w}% ${f}%, #fff ${f}% 100%)`; };
@@ -2695,48 +2711,75 @@ function pgIsoRows(p) {
   return { G, rows };
 }
 /* the isometric with its bubbles: each bubble is a small pie (green welded, yellow fitted, white to do) */
-function pgIsoSvg(p) {
+/* the bubbles alone (the drawing is loaded once; moving or touching only redraws this) */
+function pgIsoBubs(p) {
   const d = pgDwx(p); if (!d) return '';
   const vb = PG.ui.vb[pgVK(p)] || pgBox(p), R = d.w / 80 * (d.bs || 1), zoomed = vb[2] < d.w * 0.45;
   const G = pgIsoJoints(p, PG.ui.isoV), byJ = new Map(G.map(g => [g.joint, g]));
   const wedge = (a0, a1, col) => { if (a1 - a0 <= 0.0001) return ''; if (a1 - a0 >= 0.9999) return `<circle r="${R}" fill="${col}"/>`;
     const p0 = [R * Math.sin(2 * Math.PI * a0), -R * Math.cos(2 * Math.PI * a0)], p1 = [R * Math.sin(2 * Math.PI * a1), -R * Math.cos(2 * Math.PI * a1)];
     return `<path d="M0,0 L${p0[0]},${p0[1]} A${R},${R} 0 ${a1 - a0 > 0.5 ? 1 : 0} 1 ${p1[0]},${p1[1]} Z" fill="${col}"/>`; };
-  const out = [`<svg xmlns="http://www.w3.org/2000/svg" id="pgmap" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet"><image href="${d.img}" x="0" y="0" width="${d.w}" height="${d.h}"/>`];
+  const out = [];
   Object.entries(d.mk || {}).forEach(([j, xy]) => {
     const g = byJ.get(j); if (!g) return;
     const x = xy[0] * d.w, y = xy[1] * d.h, sel = PG.ui.sel.has(g.key);
-    const w = g.wel / g.ea, f = g.fit / g.ea, pn = g.pnt / g.ea;
+    const w = g.wel / g.ea, f = g.fit / g.ea, pn = g.pnt / g.ea, rep = g.rep && g.wel < g.ea;
     const pie = PG.ui.act === 'PNTJ' ? wedge(0, pn, PG_STG.PNT.color) + wedge(pn, w, PG_STG.WEL.color) : wedge(0, w, PG_STG.WEL.color) + wedge(w, f, PG_STG.FIT.color);
     const ink = (PG.ui.act === 'PNTJ' ? pn : w) >= 0.5 ? '#fff' : '#1C0B5B';
-    out.push(`<g data-pc="${esc(g.key)}" transform="translate(${x},${y})"><circle r="${R}" fill="#fff"/>${pie}<circle class="bo" r="${R}" fill="none" stroke="${sel ? PG_SEL : '#1C0B5B'}" stroke-width="${sel ? R / 2.6 : R / 7}" ${g.shop && !g.fit ? `stroke-dasharray="${R / 3} ${R / 4}"` : ''}/>
+    out.push(`<g data-pc="${esc(g.key)}" transform="translate(${x},${y})"><circle r="${R}" fill="#fff"/>${pie}<circle class="bo" r="${R}" fill="none" stroke="${sel ? PG_SEL : rep ? PG_STG.REP.color : '#1C0B5B'}" stroke-width="${sel ? R / 2.6 : rep ? R / 3.5 : R / 7}" ${g.shop && !g.fit ? `stroke-dasharray="${R / 3} ${R / 4}"` : ''}/>
       <text y="${R * 0.36}" font-size="${R * (g.joint.length > 3 ? 0.62 : 0.85)}" font-family="Arial" font-weight="700" text-anchor="middle" fill="${ink}" stroke="${ink === '#fff' ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.7)'}" stroke-width="${R / 14}" paint-order="stroke" pointer-events="none">${esc(g.joint)}</text>
-      ${zoomed ? `<text y="${R * 1.85}" font-size="${R * 0.62}" font-family="Arial" font-weight="800" text-anchor="middle" fill="#1C0B5B" stroke="#fff" stroke-width="${R / 6}" paint-order="stroke" pointer-events="none">${PG.ui.act === 'PNTJ' ? g.pnt : PG.ui.act === 'WEL' ? g.wel : g.fit}/${g.ea}</text>` : ''}</g>`);
+      ${zoomed ? `<text y="${R * 1.85}" font-size="${R * 0.62}" font-family="Arial" font-weight="800" text-anchor="middle" fill="#1C0B5B" stroke="#fff" stroke-width="${R / 6}" paint-order="stroke" pointer-events="none">${PG.ui.act === 'PNTJ' ? g.pnt : PG.ui.act === 'WEL' ? g.wel : g.fit}/${g.ea}${g.rep ? ' R' + g.rep : ''}</text>` : ''}</g>`);
   });
-  out.push('</svg>');
   return out.join('');
 }
-function pgIsoView(p) {      /* drawing (75 %) + joint list (25 %), phone turned */
-  const { rows } = pgIsoRows(p), ea = new Set(pgIsoJoints(p, PG.ui.isoV).flatMap(g => g.items.map(i => i.spool))).size;
+function pgIsoSvg(p) {
+  const d = pgDwx(p); if (!d) return '';
+  const vb = PG.ui.vb[pgVK(p)] || pgBox(p);
+  return `<svg xmlns="http://www.w3.org/2000/svg" id="pgmap" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet"><image href="${d.img}" x="0" y="0" width="${d.w}" height="${d.h}"/><g id="pgbubs">${pgIsoBubs(p)}</g></svg>`;
+}
+/* update in place: view box + bubbles (true when it could) */
+function pgIsoRedraw(p) {
+  const svg = document.getElementById('pgmap'), g = document.getElementById('pgbubs');
+  if (!svg || !g) return false;
+  svg.setAttribute('viewBox', (PG.ui.vb[pgVK(p)] || pgBox(p)).join(' ')); g.innerHTML = pgIsoBubs(p); return true;
+}
+/* the joint list: in WELD the welded joints stay below, ready for a repair */
+function pgIsoListHtml(p) {
+  const st = pgModeStage(), G = pgIsoJoints(p, PG.ui.isoV);
+  if (st === 'WEL') {
+    const toW = G.filter(g => pgAvail(p, g, 'WEL').length || (PG.ui.sel.has(g.key) && !g.wel)), done = G.filter(g => g.wel > 0);
+    const lk = g => g.items.some(i => pgLocked(p, i));
+    return { n: toW.length, html: `<div class="pgsec">TO WELD · ${toW.length}</div>${toW.map(g => pgJRow(p, g)).join('') || '<div class="hint">Nothing to weld here.</div>'}
+      <div class="pgsec">WELDED · repair · ${done.length}</div>${done.map(g => pgJRow(p, g, lk(g))).join('') || '<div class="hint">No welded joints yet.</div>'}` };
+  }
+  const rows = G.filter(g => PG.ui.done || pgAvail(p, g, st).length || PG.ui.sel.has(g.key));
+  return { n: G.filter(g => pgAvail(p, g, st).length).length, all: true, html: rows.map(g => pgJRow(p, g)).join('') || `<div class="hint">${PG.ui.done ? 'No joints.' : 'Nothing pending here. Tap All.'}</div>` };
+}
+function pgIsoView(p) {      /* like the dome: the drawing rules; the joint list opens and closes */
+  const L = pgIsoListHtml(p), ea = new Set(pgIsoJoints(p, PG.ui.isoV).flatMap(g => g.items.map(i => i.spool))).size;
   const act = pgActs(p).find(a => a[0] === PG.ui.act) || ['', ''];
-  return `<div class="app pgapp pgmapmode">
+  const ttl = PG.ui.act === 'WEL' ? 'WELD' : PG.ui.act === 'PNTJ' ? 'TO PAINT' : 'TO FIT-UP';
+  return `<div class="app pgapp pgmapmode pgisoapp">
     <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgisos">⇆ ISOs</button>
-      <div class="pgmt"><b>${esc(PG.ui.isoV)} · ${act[1]}</b><span>${ea} spool${ea === 1 ? '' : 's'} · ${esc(p.name)}</span></div><button class="pgpj sm" data-a="pgspool">☰ Per spool</button>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
+      <div class="pgmt"><b>${esc(PG.ui.isoV)} · ${act[1]}</b><span>${ea} spool${ea === 1 ? '' : 's'} · ${esc(p.name)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
     <div class="pgstage pgisost"><div class="pgisol"><div class="pgmap" id="pgmapbox">${pgIsoSvg(p)}</div>
         <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
-        <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button><button class="pgfab ${PG.ui.leg ? 'on' : ''}" data-a="pgleg" aria-label="Legend">?</button></div>
-        ${PG.ui.leg ? `<div class="pglegend pgpop"><span><i style="background:#fff"></i>To do</span><span><i style="background:${PG_STG.FIT.color}"></i>Fitted</span><span><i style="background:${PG_STG.WEL.color}"></i>Welded</span>${PG.ui.act === 'PNTJ' ? `<span><i style="background:${PG_STG.PNT.color}"></i>Painted</span>` : ''}<span><i style="background:#fff;border-style:dashed"></i>Spool in shop</span><span>The color = how many spools</span></div>` : ''}
-        <button class="pgsendfab" data-a="send">${icon('send')} Send${pgPending() + pending() ? ` <span class="badge">${pgPending() + pending()}</span>` : ''}</button>
-        ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The drawing and the list fit better sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}</div>
-      <div class="pgside"><div class="pgsideh">${PG.ui.act === 'WEL' ? 'TO WELD' : PG.ui.act === 'PNTJ' ? 'TO PAINT' : 'TO FIT-UP'}<button class="pgtg ${PG.ui.done ? 'on' : ''}" data-a="pgdone">${PG.ui.done ? '✓ ' : ''}All</button></div>
-        <div class="pglist2">${rows.map(g => pgJRow(p, g)).join('') || `<div class="hint">${PG.ui.done ? 'No joints.' : 'Nothing pending here. Tap All.'}</div>`}</div></div>
+        <div class="pgmode" id="pgmode">${PG_MODE_ISO[PG.ui.mode] || ''}</div>
+        <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button></div>
+        <div class="pglegline"><span><i style="background:#fff"></i>to do</span><span><i style="background:${PG_STG.FIT.color}"></i>fit-up</span><span><i style="background:${PG_STG.WEL.color}"></i>welded</span>${PG.ui.act === 'PNTJ' ? `<span><i style="background:${PG_STG.PNT.color}"></i>painted</span>` : ''}<span><i style="background:#fff;border:1.5px solid ${PG_STG.REP.color}"></i>repair</span><span><i style="background:#fff;border-style:dashed"></i>spool in shop</span></div>
+        ${PG.ui.jl ? '' : `<button class="pgjtab" data-a="pgjl">Joints ◂ <b>${L.n}</b></button>`}
+        ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The drawing is bigger sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}</div>
+      ${PG.ui.jl ? `<div class="pgside"><div class="pgsideh"><span>${ttl}${PG.ui.act === 'WEL' ? '' : ` · ${L.n}`}</span><span class="pgsh2">${L.all ? `<button class="pgtg ${PG.ui.done ? 'on' : ''}" data-a="pgdone">${PG.ui.done ? '✓ ' : ''}All</button>` : ''}<button class="pgtg" data-a="pgspool" title="Every spool apart">☰</button><button class="pgtg" data-a="pgjl" aria-label="Close the list">✕</button></span></div>
+        <div class="pglist2">${L.html}</div>
+</div>` : ''}
     </div>${pgBar(p)}</div>`;
 }
+const PG_MODE_ISO = { tap: 'Mode: Tap · touch a bubble', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the drawing' };
 function pgIsoList(p) {        /* no drawing: the joint list alone */
-  const { rows, G } = pgIsoRows(p), ea = new Set(G.flatMap(g => g.items.map(i => i.spool))).size;
+  const G = pgIsoJoints(p, PG.ui.isoV), L = pgIsoListHtml(p), ea = new Set(G.flatMap(g => g.items.map(i => i.spool))).size;
   return `<div class="pgisoh"><button class="pgpj" data-a="pgisos">⇆ ISOs</button><div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${ea} spool${ea === 1 ? '' : 's'} · no drawing</span></div><button class="pgpj sm" data-a="pgspool">☰ Per spool</button></div>
-    <div class="pgcount"><span>${PG.ui.done ? 'All joints' : `Only <b>${PG.ui.act === 'WEL' ? 'to weld' : PG.ui.act === 'PNTJ' ? 'to paint' : 'to fit-up'}</b>`} · ${rows.length} of ${G.length}</span><button class="pgtg ${PG.ui.done ? 'on' : ''}" data-a="pgdone">${PG.ui.done ? '✓ ' : ''}Show done</button></div>
-    <div class="pglist2 full">${rows.map(g => pgJRow(p, g)).join('') || `<div class="hint">${PG.ui.done ? 'No joints.' : 'Nothing pending here. Tap Show done.'}</div>`}</div>`;
+    ${L.all ? `<div class="pgcount"><span>${PG.ui.done ? 'All joints' : `Only <b>${PG.ui.act === 'PNTJ' ? 'to paint' : 'to fit-up'}</b>`} · ${L.n} of ${G.length}</span><button class="pgtg ${PG.ui.done ? 'on' : ''}" data-a="pgdone">${PG.ui.done ? '✓ ' : ''}Show done</button></div>` : ''}
+    <div class="pglist2 full">${L.html}</div>`;
 }
 function pgIsoBar(p) {
   const st = pgModeStage(), G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean);
@@ -2750,6 +2793,9 @@ function pgIsoBar(p) {
       <div class="pgbtns">${btns}</div>
       <div class="pgbtns2"><button class="btn ghost" data-a="pgisoback" ${G.some(g => g.fit || g.pnt) ? '' : 'disabled'}>Back to…</button><button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
 }
+const PG_REP_WHY = `<p class="msub">The joint goes back to "to weld". It does not add inch-dia again; the repair is counted apart.</p>
+  <div class="mlabel">REASON</div><div class="pgwhy">${['RT', 'UT', 'Visual', 'PT', 'Other'].map(w => `<button class="${w === 'RT' ? 'on' : ''}" data-why="${w}">${w}</button>`).join('')}</div>
+  <input class="inp" id="qWhy" value="RT" placeholder="Write the reason" style="display:none;margin-top:8px;font-size:16px">`;
 /* "how many spools?": the joints are filled in spool order (SP01, SP02…) */
 function pgQtyAsk(title, max, extra) {
   return new Promise(res => {
@@ -2757,9 +2803,12 @@ function pgQtyAsk(title, max, extra) {
     const m = UI.modal(`<h3>${title}</h3><p class="msub">${max > 1 ? `How many spools? ${max} available.` : ''}</p>
       ${max > 1 ? `<div class="pgstps">${pgStepper('qN', 'Spools', 'filled in spool order', Math.min(1, max), max)}</div>` : ''}
       ${extra || ''}
-      <div class="mbtns">${max > 1 ? `<button class="btn ghost" data-x="all">All (${max})</button>` : '<button class="btn ghost" data-x="no">Cancel</button>'}<button class="btn primary" data-x="ok">OK</button></div>`, { locked: true });
+      <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button>${max > 1 ? `<button class="btn ghost" data-x="all">All (${max})</button>` : ''}<button class="btn primary" data-x="ok">OK</button></div>`, { locked: true });
     if (max > 1) pgWireSteppers(m);
-    m.addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (!b) return;
+    m.addEventListener('click', e => {
+      const wy = e.target.closest('[data-why]');
+      if (wy) { m.querySelectorAll('[data-why]').forEach(x => x.classList.toggle('on', x === wy)); const i = m.querySelector('#qWhy'); const oth = wy.dataset.why === 'Other'; i.style.display = oth ? '' : 'none'; i.value = oth ? '' : wy.dataset.why; if (oth) i.focus(); return; }
+      const b = e.target.closest('[data-x]'); if (!b) return;
       const why = m.querySelector('#qWhy') ? m.querySelector('#qWhy').value.trim() : '';
       if (b.dataset.x === 'no') { UI.close(); res(null); return; }
       if (b.dataset.x === 'all') { UI.close(); res({ n: max, why }); return; }
@@ -2778,7 +2827,7 @@ async function pgIsoMark(p, stage) {
   if (!max) return;
   const label = stage === 'FIT' ? 'Fit-up ✓' : stage === 'WEL' ? 'Weld ✓' : stage === 'PNT' ? 'Painted ✓' : 'Repair';
   const r = await pgQtyAsk(`${label} · ${G.length === 1 ? 'joint ' + esc(G[0].joint) : G.length + ' joints'}`, max,
-    stage === 'REP' ? `<p class="msub">The joint goes back to "to weld" on those spools. It does not add inch-dia again; the repair is counted apart.</p><div class="field"><label>Reason (optional: RT, UT, visual…)</label><input class="inp" id="qWhy"></div>` : (G.length > 1 && max > 1 ? '<p class="msub">The number applies to each selected joint.</p>' : ''));
+    stage === 'REP' ? PG_REP_WHY : (G.length > 1 && max > 1 ? '<p class="msub">The number applies to each selected joint.</p>' : ''));
   if (!r) return;
   PG.ui.repWhy = r.why || '';
   const ids = av.flatMap(a => a.slice(0, r.n).map(i => i.id));
@@ -2878,14 +2927,15 @@ function pgPipingNew(p) {
 function pgWeighted(p) {
   if (!p.ready || !Array.isArray(p.acts) || !p.w) return null;
   const J = p.items.filter(i => i.kind === 'JOINT'), SP = p.items.filter(i => i.kind === 'SPOOL');
-  const nd = (L, s) => L.filter(i => pgM(p, i)[s]).reduce((a, i) => a + (i.nd || 0), 0), tot = L => L.reduce((a, i) => a + (i.nd || 0), 0);
+  const v = i => p.jp && p.jp[i.id] !== undefined ? p.jp[i.id] : (i.nd || 0);      /* TB-10 points when the office calculated the weights */
+  const nd = (L, s) => L.filter(i => pgM(p, i)[s]).reduce((a, i) => a + v(i), 0), tot = L => L.reduce((a, i) => a + v(i), 0);
   const Z = (p.zones || []).map(z => pgZoneCounts(p, z)), zp = Z.reduce((a, c) => a + c.planned, 0);
   const f = (d, t) => t > 0 ? Math.min(1, d / t) : 0;
   const part = k => {
     if (/^(FIT|WEL)_(SHOP|FIELD)$/.test(k)) { const L = J.filter(i => i.loc === (k.endsWith('SHOP') ? 'SHOP' : 'FIELD')); return f(nd(L, k.slice(0, 3)), tot(L)); }
     if (k === 'SUP_FAB') return f(Z.reduce((a, c) => a + Math.min(c.fab, c.planned), 0), zp);
     if (k === 'SUP_INS') return f(Z.reduce((a, c) => a + Math.min(c.ins, c.planned), 0), zp);
-    if (k === 'PAINT') return p.paint === 'SPOOL' ? f(SP.filter(i => pgM(p, i).PNT).length, SP.length) : f(nd(J, 'PNT'), tot(J));
+    if (k === 'PAINT') return p.paint === 'SPOOL' ? f(SP.filter(i => pgM(p, i).PNT).length, SP.length) : f(J.filter(i => pgM(p, i).PNT).reduce((a, i) => a + (i.nd || 0), 0), J.reduce((a, i) => a + (i.nd || 0), 0));
     if (k === 'TRQ') { const T = p.items.filter(i => i.kind === 'TORQUE'); return f(T.filter(i => pgM(p, i).TRQ).length, T.length); }
     if (k === 'HYDRO') { const T = p.tps || []; return f(T.filter(t => pgTpTested(p, t)).length, T.length); }
     if (k === 'SHIP' || k === 'INST') return f(SP.filter(i => pgM(p, i)[k]).length, SP.length);
