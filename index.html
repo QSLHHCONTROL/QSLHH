@@ -326,6 +326,88 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 @media (min-width:900px){.pgbar{flex-direction:row;align-items:flex-end;flex-wrap:wrap}.pgsum{flex:1 1 220px;min-width:0}.pgbtns .btn{flex:none}}
 .pgapp .pgfoot{display:flex !important;gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
 @media (max-width:760px){.pgfoot .status,.pgfoot .foot-ep{display:none}.pgfoot .btn{flex:1;min-height:46px}}
+/* ---------- v2.4.1: clean screens (choose project · piping by today's work · map full screen) ---------- */
+.pgapp{position:relative;overflow:hidden}
+.pgpick-h h2{margin:6px 2px 2px;font-size:21px;color:var(--q)}
+.pgpick-h div{font-size:13px;color:var(--muted);margin:0 2px 6px}
+.pgns{color:#C24E00}
+.pgpick{display:flex;flex-direction:column;gap:12px}
+.pgcard{display:flex;flex-direction:column;align-items:stretch;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:15px 16px;gap:3px;box-shadow:0 4px 14px rgba(28,11,91,.06);color:var(--q)}
+.pgcard:active{background:#F7F6FB}
+.pgcard .k{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.5px}
+.pgcard .r1{display:flex;align-items:baseline;gap:10px}
+.pgcard .n{font-size:21px;flex:1;min-width:0;overflow-wrap:anywhere}
+.pgcard .pc{font-size:25px;white-space:nowrap}
+.pgcard .s{font-size:13px;color:#4A4570;margin-bottom:8px}
+.pgcard .t{font-size:12px;color:var(--muted);margin-top:4px}
+.pgnsc{display:inline-block;vertical-align:middle;background:#FFF1E6;color:#C24E00;border:1.5px solid #FF6A00;border-radius:10px;font-size:11px;padding:2px 8px;font-weight:800}
+.pgpbar{height:10px;border-radius:5px;background:#ECEAF6;overflow:hidden;display:block}
+.pgpbar i{display:block;height:100%;border-radius:5px}
+.pghead{display:flex;align-items:center;gap:8px;padding:8px 10px 2px}
+.pgpj{min-height:40px;border-radius:14px;border:1.5px solid #C9C6DB;background:#fff;color:var(--q);font-weight:800;font-size:13px;padding:0 12px;flex:none;white-space:nowrap}
+.pgmt{flex:1;min-width:0;display:flex;flex-direction:column}
+.pgmt b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pgmt span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pgdate{position:relative;flex:none;min-height:38px;border-radius:14px;border:1.5px solid #C9C6DB;background:#fff;color:var(--q);font-weight:800;font-size:13px;padding:0 12px;display:flex;align-items:center;white-space:nowrap}
+.pgdate input{position:absolute;inset:0;opacity:0;width:100%;height:100%;font-size:16px;border:none;cursor:pointer}
+.pgdate.nt{background:var(--redbg);border-color:var(--red);color:var(--red)}
+.pgjm span{font-size:12px;font-weight:800;color:var(--muted)}
+.pgjm div{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:5px}
+.pgjm button{min-height:50px;border-radius:16px;border:1.5px solid #C9C6DB;background:#fff;color:var(--q);font-weight:800;font-size:16px}
+.pgjm button.on.fit{background:#F2C200;border-color:#F2C200;color:#3D2A00}
+.pgjm button.on.wel{background:#2E9D5B;border-color:#2E9D5B;color:#fff}
+.pgcount{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.pgcount span{flex:1}
+.pgtg{min-height:36px;border-radius:12px;border:1.5px solid #C9C6DB;background:#fff;color:var(--q);font-weight:700;font-size:12px;padding:0 10px}
+.pgtg.on{background:var(--q);color:#fff;border-color:var(--q)}
+.pgmain{padding-bottom:12px}
+/* the window from below */
+.pgsheet{position:absolute;left:0;right:0;bottom:0;z-index:30;background:#fff;border-radius:24px 24px 0 0;box-shadow:0 -8px 24px rgba(28,11,91,.2);padding:8px 12px calc(12px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .18s ease;max-height:70%;overflow:auto}
+.pgsheet.on{transform:none}
+.pgsheet .grab{width:44px;height:5px;border-radius:3px;background:#D5D2E3;margin:0 auto 8px}
+.pgsrow{display:flex;flex-direction:column;gap:8px}
+.pgsum b{font-size:17px}
+.pgcrew{display:flex;flex-direction:column;font-size:12px;font-weight:700;gap:3px;color:var(--muted)}
+.pgcrew .inp{min-height:42px;font-size:16px}
+.pgsheet .pgbtns .btn{min-height:56px;font-size:17px;flex:1 1 40%}
+.pgbtns2{display:flex;gap:6px}.pgbtns2 .btn{flex:1;min-height:44px}
+/* map: whole screen */
+.pgmapmode{background:#fff}
+.pgmtop{display:flex;align-items:center;gap:8px;background:var(--q);padding:6px 10px;padding-top:calc(6px + env(safe-area-inset-top));min-height:50px}
+.pgmtop .logo{background:#fff;border-radius:10px;padding:2px 5px;display:flex;flex:none}.pgmtop .logo img{height:26px}
+.pgmtop .ep{height:28px;flex:none}
+.pgmtop .pgmt b{color:#fff}.pgmtop .pgmt span{color:#D9D6EE}
+.pgstage{position:relative;flex:1;min-height:0}
+.pgstage .pgmap{position:absolute;inset:0;border:none;border-radius:0;min-height:0}
+.pgfabs{position:absolute;top:10px;display:flex;flex-direction:column;gap:8px;z-index:5}
+.pgfabs.l{left:10px}.pgfabs.r{right:10px}
+.pgfab{width:46px;height:46px;border-radius:23px;background:#fff;border:1.5px solid #C9C6DB;color:var(--q);font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(28,11,91,.15);padding:0}
+.pgfab.sm{font-size:13px}.pgfab .ic{width:20px;height:20px}
+.pgfab.on{background:var(--q);color:#fff;border-color:var(--q)}
+.pgsendfab{position:absolute;right:10px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:5;min-height:46px;border-radius:23px;border:none;background:var(--q);color:#fff;font-weight:800;font-size:14px;padding:0 16px;display:flex;align-items:center;gap:6px;box-shadow:0 3px 10px rgba(28,11,91,.25)}
+.pgsendfab .ic{width:18px;height:18px}
+.pgsendfab.hid{display:none}
+.pgpop{position:absolute;right:66px;top:10px;z-index:6;background:#fff;border:1.5px solid #C9C6DB;border-radius:14px;padding:10px 12px;max-width:260px;box-shadow:0 4px 14px rgba(28,11,91,.18)}
+.pgrot{position:absolute;inset:0;z-index:20;background:rgba(28,11,91,.55);display:none;align-items:center;justify-content:center;padding:20px}
+.pgrot>div{background:#fff;border-radius:20px;padding:18px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;max-width:300px}
+.pgrot b{font-size:20px;color:var(--q)}.pgrot span{font-size:14px;color:var(--muted)}
+@media (orientation:portrait){.pgrot{display:flex}}
+/* phone sideways: the window is one thin row */
+@media (orientation:landscape) and (max-height:560px){
+  .pgmapmode .pgsheet{padding:6px 12px calc(8px + env(safe-area-inset-bottom))}
+  .pgmapmode .pgsheet .grab{margin-bottom:4px}
+  .pgmapmode .pgsrow{flex-direction:row;align-items:center;gap:10px}
+  .pgmapmode .pgsum{min-width:150px;max-width:200px}
+  .pgmapmode .pgsheet .pgbtns{flex:1;flex-wrap:nowrap}
+  .pgmapmode .pgsheet .pgbtns .btn{min-height:50px;font-size:15px}
+  .pgmapmode .pgbtns2{flex:none}.pgmapmode .pgbtns2 .btn{min-height:46px;flex:none;padding:0 12px}
+  .pgmapmode .pgfab{width:42px;height:42px}
+  .pgmapmode .pgfabs{gap:6px;top:8px}
+}
+.pgsml{display:flex;flex-direction:column;gap:8px;margin:10px 0 4px}
+.pgsm{display:flex;align-items:center;gap:10px;background:#F7F6FB;border-radius:14px;padding:10px 12px}
+.pgsm div{flex:1;display:flex;flex-direction:column}.pgsm span{font-size:12px;color:var(--muted)}
+.pgapp:has(.pgsheet.on) .pgmain{padding-bottom:240px}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -744,7 +826,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.4.1';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -2484,6 +2566,7 @@ function standbyModal() {
 async function sendToAdmin() {
   const n = pending(), pn = typeof pgPending === 'function' ? pgPending() : 0;
   if (!n && !pn) { UI.toast('Nothing new to send. Admin already has everything.', 'ok'); return; }
+  if (pn && !await pgSendSummary(n)) return;      /* the summary of what goes, before sending */
   if (!n && pn) { await pgSendOnly(); return; }     /* only progress today: a progress file */
   const changed = S.records.filter(r => r.ts > S.lastSend);
   const dates = Array.from(new Set(changed.map(r => r.date).concat(S.absences.filter(a => a.ts > S.lastSend).map(a => a.date)).concat(S.completed.filter(c => c.ts > S.lastSend).map(c => c.date)))).sort();
@@ -2901,7 +2984,7 @@ function onClick(e) {
     case 'summary': summaryModal(today()); break;
     case 'settings': openSettings(false); break;
     case 'time': timeModal(); break;
-    case 'progress': ui.mode = 'progress'; ui.sel = []; render(); break;
+    case 'progress': ui.mode = 'progress'; ui.sel = []; if (typeof PG !== 'undefined') { PG.ui.pid = ''; PG.ui.sel = new Set(); } render(); break;
   }
 }
 
@@ -2937,7 +3020,7 @@ window.addEventListener('DOMContentLoaded', boot);
 
 const PG = {
   S: null,
-  ui: { pid: '', sel: new Set(), tab: 'joints', iso: 'ALL', spool: 'ALL', loc: 'ALL', stf: 'ALL', q: '', vb: {}, mode: 'tap', crew: '', date: '' },
+  ui: { pid: '', sel: new Set(), tab: 'joints', iso: 'ALL', spool: 'ALL', loc: 'ALL', stf: 'ALL', q: '', vb: {}, mode: 'tap', crew: '', date: '', jm: 'FIT', done: false, leg: false, vert: false },
   cache: null
 };
 const PG_STG = {
@@ -3054,11 +3137,26 @@ async function pgImport() {
     PG.S.marks = PG.S.marks.filter(m => !m.sent || String(m.at) > String(at));
     PG.S.lists = { at, by: data.by || '', projects: data.projects };
     PG.S.at = new Date().toISOString();
-    if (!pgProj(PG.ui.pid)) PG.ui.pid = (data.projects[0] || {}).id || '';
+    PG.ui.pid = '';      /* back to Choose project */
     PG.ui.sel = new Set();
     await pgSave(); render();
     UI.toast(`Progress lists loaded: ${data.projects.length} project(s).`, 'ok');
   } catch (e) { UI.alert('Progress lists', 'Could not import the file.\n' + (e.message || e)); }
+}
+/* what goes in the file, per project, before sending */
+function pgSendSummary(nHH) {
+  return new Promise(res => {
+    const un = PG.S.marks.filter(m => !m.sent);
+    const rows = pgProjects().map(p => { const mk = un.filter(m => m.pid === p.id); if (!mk.length) return '';
+      const c = {}; mk.forEach(m => { const k = m.act === 'CLR' ? 'Back to pending' : pgLabel(p, m.stage); c[k] = (c[k] || 0) + 1; });
+      return `<div class="pgsm"><div><b>${pgDome(p) ? 'Dome' : pgRep(p) ? 'Tank' : 'Piping'} · ${esc(p.name)}</b><span>${Object.keys(c).map(esc).join(' · ')}</span></div><b>${Object.values(c).join(' · ')}</b></div>`; }).join('');
+    const tot = un.length + (nHH || 0);
+    const m = UI.modal(`<h3>${icon('send')} Send to Admin</h3><p class="msub">What you send · ${fmtDate(todayStr())}</p>
+      <div class="pgsml">${rows}${nHH ? `<div class="pgsm"><div><b>Man-hours</b><span>Crew records</span></div><b>${nHH}</b></div>` : ''}</div>
+      <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="ok">${icon('send')} Send (${tot})</button></div>`, { locked: true });
+    m.querySelector('[data-x=no]').onclick = () => { UI.close(); res(false); };
+    m.querySelector('[data-x=ok]').onclick = () => { UI.close(); res(true); };
+  });
 }
 function pgPayload() { return { type: 'QSL_PROGRESS_DAY', v: 1, sup: S.sup || '', dev: S.dev, at: new Date().toISOString(), marks: PG.S.marks.filter(m => !m.sent).map(m => { const x = Object.assign({}, m); delete x.sent; delete x.batch; return x; }) }; }
 async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); await pgSave(); }
@@ -3080,43 +3178,89 @@ function pgTop() {
       <div class="pills"><button class="pill tap hide-sm" data-a="settings">${esc(S.sup || 'Choose supervisor')}</button><span class="pill">${fmtDate(todayStr())}</span></div>
     </div><div class="band"></div>`;
 }
-function pgRender(root) {
-  const P0 = pgProjects();
-  if (P0.length && !pgCur()) PG.ui.pid = P0[0].id;
-  const p = pgCur();
+/* the one number of a project (same as the office) */
+function pgHeadline(p) {
+  if (pgDome(p)) { const S0 = p.items.filter(i => i.kind === 'STRIP'), d = S0.filter(i => pgM(p, i).PLS).length; return { pct: pgPct(d, S0.length), txt: `${d} / ${S0.length} strips`, col: PG_STG.PLS.color }; }
+  if (pgRep(p)) { const t = p.items.reduce((a, i) => a + (i.ft || 0), 0), d = p.items.filter(i => pgM(p, i).WEL).reduce((a, i) => a + (i.ft || 0), 0); return { pct: pgPct(d, t), txt: `welded ${Math.round(d).toLocaleString('en-US')} / ${Math.round(t).toLocaleString('en-US')} ft`, col: PG_STG.WEL.color }; }
+  const J = p.items.filter(i => i.kind === 'JOINT'), t = J.reduce((a, i) => a + (i.nd || 0), 0);
+  const f = J.filter(i => pgM(p, i).FIT).reduce((a, i) => a + i.nd, 0), w = J.filter(i => pgM(p, i).WEL).reduce((a, i) => a + i.nd, 0);
+  return { pct: t ? Math.round((0.4 * f + 0.6 * w) / t * 1000) / 10 : 0, txt: `welded ${pgF1(w)} / ${pgF1(t)} in-dia`, col: PG_STG.WEL.color };
+}
+const pgUnsent = p => PG.S.marks.filter(m => !m.sent && m.pid === p.id).length;
+const pgKind = p => pgDome(p) ? 'DOME ROOF' : pgRep(p) ? 'TANK REPAIR' : 'PIPING';
+const pgWo = p => { const w = String(p.wo || '').trim().replace(/^W\.?O\.?[\s#:.-]*/i, '').trim(); return w ? 'WO ' + w : ''; };
+function pgFoot() {
   const nP = pgPending() + pending();
-  const head = `<div class="pgh"><button class="btn sm" data-a="pgback">${icon('undo')} Man-hours</button>
-    <div class="pgchips">${P0.map(x => `<button class="chip ${x.id === PG.ui.pid ? 'sel' : ''}" data-pgp="${esc(x.id)}">${pgRep(x) ? 'Tank' : pgDome(x) ? 'Dome' : 'Piping'} · ${esc(x.name)}</button>`).join('')}</div></div>`;
-  let body = '';
-  if (!P0.length) body = `<div class="welcome"><div class="box"><img src="${LOGO_EP}" alt="EP" style="height:64px"><h2>Progress</h2>
-      <p>Import the <b>progress lists</b> from the office (Progress Admin → Import / Export → Export lists).</p>
-      <button class="btn primary" data-a="pgimport">${icon('download')} Import progress lists</button></div></div>`;
-  else body = pgIsMap(p) ? pgRepair(p) : pgPiping(p);
-  root.innerHTML = `<div class="app pgapp">${pgTop()}${head}<div class="pgmain">${body}</div>
-    ${p ? pgBar(p) : ''}
-    <div class="foot pgfoot"><button class="btn sm primary" data-a="send">${icon('send')} Send to Admin${nP ? ` <span class="badge">${nP}</span>` : ''}</button>
+  return `<div class="foot pgfoot"><button class="btn sm primary" data-a="send">${icon('send')} Send to Admin${nP ? ` <span class="badge">${nP}</span>` : ''}</button>
       <button class="btn sm upd" data-a="pgimport">${icon('download')} Lists</button>
       <button class="btn sm" data-a="pgundo" ${PG.S.marks.some(m => !m.sent) ? '' : 'disabled'}>${icon('undo')} Undo</button>
-      <span class="status">${PG.S.lists ? `Lists ${fmtDate(String(PG.S.lists.at).slice(0, 10))}` : ''}${pgPending() ? ` · ${pgPending()} mark(s) not sent` : ''}</span>
-      <span class="foot-ep">Powered by <img src="${LOGO_EP}" alt="EP"></span></div></div>`;
-  pgWireMap();
+      <span class="status">${PG.S.lists ? `Lists ${fmtDate(String(PG.S.lists.at).slice(0, 10))}` : ''}</span>
+      <span class="foot-ep">Powered by <img src="${LOGO_EP}" alt="EP"></span></div>`;
+}
+function pgDateChip() {
+  const d = PG.ui.date || todayStr(), nt = d !== todayStr();
+  return `<label class="pgdate ${nt ? 'nt' : ''}">${nt ? 'Date ' : 'Today '}${esc(fmtDate(d).slice(0, 6))}<input type="date" id="pgDate" value="${d}" max="${todayStr()}" aria-label="Date of the progress"></label>`;
+}
+function pgRender(root) {
+  const P0 = pgProjects();
+  if (PG.ui.pid && !pgCur()) PG.ui.pid = '';
+  const p = pgCur();
+  if (!P0.length) {
+    root.innerHTML = `<div class="app pgapp">${pgTop()}<div class="pgh"><button class="btn sm" data-a="pgback">${icon('undo')} Man-hours</button></div>
+      <div class="pgmain"><div class="welcome"><div class="box"><img src="${LOGO_EP}" alt="EP" style="height:64px"><h2>Progress</h2>
+      <p>Import the <b>progress lists</b> from the office (Progress Admin → Import / Export → Export lists).</p>
+      <button class="btn primary" data-a="pgimport">${icon('download')} Import progress lists</button></div></div></div>${pgFoot()}</div>`;
+    return;
+  }
+  if (!p) {      /* choose the project */
+    const tot = pgPending();
+    root.innerHTML = `<div class="app pgapp">${pgTop()}<div class="pgh"><button class="btn sm" data-a="pgback">${icon('undo')} Man-hours</button></div>
+      <div class="pgmain"><div class="pgpick-h"><h2>Choose project</h2><div>${P0.length} open project(s)${PG.S.lists ? ` · lists of ${fmtDate(String(PG.S.lists.at).slice(0, 10))}` : ''}${tot ? ` · <b class="pgns">${tot} mark(s) not sent</b>` : ''}</div></div>
+      <div class="pgpick">${P0.map(x => { const h = pgHeadline(x), u = pgUnsent(x);
+        return `<button class="pgcard" data-pgp="${esc(x.id)}"><span class="k">${pgKind(x)}</span>
+          <span class="r1"><b class="n">${esc(x.name)}${u ? ` <span class="pgnsc">${u} not sent</span>` : ''}</b><b class="pc">${h.pct.toFixed(1)}%</b></span>
+          <span class="s">${esc([pgWo(x), x.desc].filter(Boolean).join(' · '))}</span>
+          <span class="pgpbar"><i style="width:${Math.min(100, h.pct)}%;background:${h.col}"></i></span><span class="t">${esc(h.txt)}</span></button>`; }).join('')}</div></div>${pgFoot()}</div>`;
+    return;
+  }
+  const h = pgHeadline(p);
+  if (pgIsMap(p)) {     /* map: whole screen, best with the phone turned */
+    root.innerHTML = `<div class="app pgapp pgmapmode">
+      <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgprojects">⇆ Projects</button>
+        <div class="pgmt"><b>${pgDome(p) ? 'Dome' : 'Tank'} · ${esc(p.name)}</b><span>${h.pct.toFixed(1)}% · ${esc(h.txt)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
+      <div class="pgstage"><div class="pgmap" id="pgmapbox">${pgMapSvg(p)}</div>
+        <div class="pgfabs l"><button class="pgfab ${PG.ui.mode === 'tap' ? 'on' : ''}" data-pgm="tap" aria-label="Tap select">☝</button><button class="pgfab ${PG.ui.mode === 'box' ? 'on' : ''}" data-pgm="box" aria-label="Box select">⬚</button><button class="pgfab ${PG.ui.mode === 'pan' ? 'on' : ''}" data-pgm="pan" aria-label="Move">✥</button></div>
+        <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button><button class="pgfab" data-a="pgfind" aria-label="Find">${icon('search')}</button><button class="pgfab ${PG.ui.leg ? 'on' : ''}" data-a="pgleg" aria-label="Legend">?</button></div>
+        ${PG.ui.leg ? `<div class="pglegend pgpop">${pgLegend(p)}</div>` : ''}
+        <button class="pgsendfab" data-a="send">${icon('send')} Send${pgPending() + pending() ? ` <span class="badge">${pgPending() + pending()}</span>` : ''}</button>
+        ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The map is bigger with the phone sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}
+      </div>${pgBar(p)}</div>`;
+    pgWireMap();
+    return;
+  }
+  root.innerHTML = `<div class="app pgapp">${pgTop()}
+    <div class="pghead"><button class="pgpj lt" data-a="pgprojects">⇆ Projects</button><div class="pgmt"><b>${esc(p.name)}</b><span>Piping${pgWo(p) ? ' · ' + esc(pgWo(p)) : ''} · ${h.pct.toFixed(1)}%</span></div>${pgDateChip()}</div>
+    <div class="pgmain">${pgPiping(p)}</div>${pgFoot()}${pgBar(p)}</div>`;
+}
+function pgLegend(p) {
+  if (pgDome(p)) return `<span><i style="background:${PG_DPEND}"></i>Strip</span><span><i style="background:${PG_STG.PLS.color}"></i>Strip placed</span><span><i style="background:#fff;border:2px solid #8C86B8;border-radius:50%"></i>Node</span><span><i style="background:${PG_STG.PLN.color};border-radius:50%"></i>Node placed</span><span><i style="background:${PG_DREF}"></i>Reference</span><span><i style="background:${PG_SEL}"></i>Selected</span>`;
+  return `<span><i style="background:${PG_PEND}"></i>Pending</span>${['GOU', 'FIT', 'WEL', 'TST'].map(s => `<span><i style="background:${PG_STG[s].color}"></i>${PG_STG[s].r}</span>`).join('')}<span><i style="background:${PG_SEL}"></i>Selected</span>`;
 }
 function pgSelItems(p) { return Array.from(PG.ui.sel).map(id => p.items.find(i => i.id === id)).filter(Boolean); }
+/* the window that comes up from below when something is selected */
 function pgBar(p) {
   const items = pgSelItems(p);
   const qty = {}; items.forEach(it => { const u = pgUnit(p, it); qty[u] = (qty[u] || 0) + pgQty(p, it); });
   const all = pgRep(p) ? ['GOU', 'FIT', 'WEL', 'TST'] : pgDome(p) ? ['PLS', 'PLN'] : PG.ui.tab === 'spools' ? ['SHIP', 'INST'] : PG.ui.tab === 'torque' ? ['TRQ'] : PG.ui.tab === 'other' ? ['INS'] : ['FIT', 'WEL'];
-  const st = items.length ? all.filter(s => items.some(it => pgStages(it).includes(s))) : all;
-  const d = PG.ui.date || todayStr();
-  return `<div class="pgbar" id="pgbar">
-    <div class="pgsum"><b>${items.length ? `${items.length} selected · ${Object.entries(qty).map(([u, q]) => `${['spools', 'pcs', 'strips', 'nodes'].includes(u) ? q : pgF1(q)} ${u}`).join(' · ')}` : 'Tap to select'}</b>
-      <span>${items.slice(0, 10).map(it => esc(pgName(it))).join(', ')}${items.length > 10 ? ' …' : ''}</span></div>
-    <div class="pgopts"><label class="${d !== todayStr() ? 'nt' : ''}">Date<input type="date" id="pgDate" class="inp" value="${d}" max="${todayStr()}"></label>
-      ${!pgIsMap(p) && PG.ui.tab === 'joints' ? `<label>Fitter initials / stamp<input id="pgCrew" class="inp" value="${esc(PG.ui.crew)}" placeholder="JR / MP · W-12"></label>` : ''}</div>
-    <div class="pgbtns">${st.map(s => { const n = items.filter(it => pgNext(p, it) === s).length;
-      return `<button class="btn" data-pgmark="${s}" ${n ? '' : 'disabled'} style="${n ? `background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}` : ''}">${esc(pgLabel(p, s))}${n ? ` ✓ ${n}` : ''}</button>`; }).join('')}
-      <button class="btn ghost" data-a="pgbacksel" ${items.some(it => pgDone(p, it) >= 0) ? '' : 'disabled'}>Back to…</button>
-      <button class="btn ghost" data-a="pgclear" ${items.length ? '' : 'disabled'} aria-label="Clear selection">${icon('x')}</button></div></div>`;
+  const st = all.filter(s => items.some(it => pgStages(it).includes(s)));
+  const txt = pgDome(p) ? [['STRIP', 'strip'], ['NODE', 'node']].map(([k, w]) => { const n = items.filter(i => i.kind === k).length; return n ? `${n} ${w}${n > 1 ? 's' : ''}` : ''; }).filter(Boolean).join(' · ')
+    : `${items.length} selected · ${Object.entries(qty).map(([u, q]) => `${['spools', 'pcs', 'strips', 'nodes'].includes(u) ? q : pgF1(q)} ${u}`).join(' · ')}`;
+  return `<div class="pgsheet ${items.length ? 'on' : ''}" id="pgbar"><div class="grab"></div>
+    <div class="pgsrow"><div class="pgsum"><b>${items.length ? txt : ''}</b><span>${items.slice(0, 8).map(it => esc(pgName(it))).join(', ')}${items.length > 8 ? ' …' : ''}</span></div>
+      ${!pgIsMap(p) && PG.ui.tab === 'joints' ? `<label class="pgcrew">Fitter initials / stamp (optional)<input id="pgCrew" class="inp" value="${esc(PG.ui.crew)}" placeholder="JR / MP · W-12"></label>` : ''}
+      <div class="pgbtns">${st.map(s => { const n = items.filter(it => pgNext(p, it) === s).length;
+        return `<button class="btn" data-pgmark="${s}" ${n ? '' : 'disabled'} style="${n ? `background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}` : ''}">${esc(pgLabel(p, s))} ✓${n ? ` (${n})` : ''}</button>`; }).join('')}</div>
+      <div class="pgbtns2"><button class="btn ghost" data-a="pgbacksel" ${items.some(it => pgDone(p, it) >= 0) ? '' : 'disabled'}>Back to…</button><button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
 }
 function pgRefresh() {
   const p = pgCur(); if (!p) return;
@@ -3127,6 +3271,7 @@ function pgRefresh() {
     document.querySelectorAll('circle[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (!it) return; const s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLN; el.setAttribute('fill', s ? PG_SEL : dn ? PG_STG.PLN.color : '#FFFFFF'); el.setAttribute('stroke', s ? PG_SEL : dn ? PG_STG.PLN.color : '#8C86B8'); });
   } else document.querySelectorAll('[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (it) el.setAttribute('fill', PG.ui.sel.has(it.id) ? PG_SEL : pgColor(p, it)); });
   document.querySelectorAll('[data-pgr]').forEach(r => r.classList.toggle('sel', PG.ui.sel.has(r.dataset.pgr)));
+  const sf = document.querySelector('.pgsendfab'); if (sf) sf.classList.toggle('hid', PG.ui.sel.size > 0);
 }
 
 /* ----- tank map ----- */
@@ -3165,16 +3310,6 @@ function pgMapSvg(p) {
   }
   out.push('</svg>');
   return out.join('');
-}
-function pgRepair(p) {
-  const st = ['GOU', 'FIT', 'WEL', 'TST'], dm = pgDome(p);
-  const leg = dm ? `<span><i style="background:${PG_DPEND}"></i>Strip</span><span><i style="background:${PG_STG.PLS.color}"></i>Strip placed</span><span><i style="background:#fff;border:2px solid #8C86B8;border-radius:50%"></i>Node</span><span><i style="background:${PG_STG.PLN.color};border-radius:50%"></i>Node placed</span><span><i style="background:${PG_DREF}"></i>Reference</span>`
-    : `<span><i style="background:${PG_PEND}"></i>Pending</span>${st.map(s => `<span><i style="background:${PG_STG[s].color}"></i>${PG_STG[s].r}</span>`).join('')}`;
-  return `<div class="pgtools"><div class="search pgsearch">${icon('search')}<input id="pgFind" placeholder="${dm ? 'Find strip (S045)' : 'Find piece (P1-045)'}" enterkeyhint="search"></div>
-      <div class="seg pgseg"><button class="${PG.ui.mode === 'tap' ? 'sel' : ''}" data-pgm="tap">Tap</button><button class="${PG.ui.mode === 'box' ? 'sel' : ''}" data-pgm="box">Box</button><button class="${PG.ui.mode === 'pan' ? 'sel' : ''}" data-pgm="pan">Move</button></div>
-      <button class="btn sm" data-a="pgzin" aria-label="Zoom in">+</button><button class="btn sm" data-a="pgzout" aria-label="Zoom out">−</button><button class="btn sm" data-a="pgzall">All</button></div>
-    <div class="pglegend">${leg}<span><i style="background:${PG_SEL}"></i>Selected</span></div>
-    <div class="pgmap" id="pgmapbox">${pgMapSvg(p)}</div>`;
 }
 function pgRedraw(p) { const b = document.getElementById('pgmapbox'); if (b) { b.innerHTML = pgMapSvg(p); pgWireMap(); } }
 function pgZoom(p, f) {
@@ -3240,7 +3375,7 @@ function pgWireMap() {
   svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
 }
 
-/* ----- piping lists ----- */
+/* ----- piping lists: only what is pending for the work of today ----- */
 function pgPiping(p) {
   const tabs = [['joints', 'Joints'], ['spools', 'Spools'], ['torque', 'Flanges'], ['other', 'Supports']].filter(t => t[0] === 'joints' || p.items.some(i => i.kind === { spools: 'SPOOL', torque: 'TORQUE', other: 'OTHER' }[t[0]]));
   if (!tabs.some(t => t[0] === PG.ui.tab)) PG.ui.tab = 'joints';
@@ -3248,34 +3383,38 @@ function pgPiping(p) {
   const isos = Array.from(new Set(p.items.filter(i => kinds.includes(i.kind)).map(i => i.iso).filter(Boolean))).sort(cmpStr);
   if (PG.ui.iso !== 'ALL' && !isos.includes(PG.ui.iso)) PG.ui.iso = 'ALL';
   const spools = PG.ui.iso === 'ALL' ? [] : Array.from(new Set(p.items.filter(i => i.iso === PG.ui.iso && i.spool && kinds.includes(i.kind)).map(i => i.spool))).sort(cmpStr);
+  const jm = PG.ui.jm || 'FIT';
   const q = PG.ui.q.trim().toUpperCase();
-  const rows = p.items.filter(i => kinds.includes(i.kind))
+  const base = p.items.filter(i => kinds.includes(i.kind))
     .filter(i => PG.ui.iso === 'ALL' || i.iso === PG.ui.iso)
     .filter(i => PG.ui.spool === 'ALL' || !spools.length || i.spool === PG.ui.spool)
     .filter(i => PG.ui.loc === 'ALL' || PG.ui.tab !== 'joints' || i.loc === PG.ui.loc)
-    .filter(i => { if (PG.ui.stf === 'ALL') return true; if (i.kind === 'SPOOL') return pgSpoolInfo(p, i).status === PG.ui.stf; const k = pgDone(p, i);
-      return PG.ui.stf === 'PEND' ? k < 0 : PG.ui.stf === 'DONE' ? !pgNext(p, i) : PG.ui.stf === 'TOWELD' ? pgNext(p, i) === 'WEL' : (k >= 0 && pgNext(p, i)); })
-    .filter(i => !q || `${i.iso || ''} ${i.spool || ''} ${i.joint || i.tag || ''}`.toUpperCase().includes(q))
+    .filter(i => !q || `${i.iso || ''} ${i.spool || ''} ${i.joint || i.tag || ''}`.toUpperCase().includes(q));
+  /* hide what is already done for the work of today (Show done brings everything back) */
+  const todo = i => PG.ui.tab === 'joints' ? (i.kind === 'THREAD' ? !!pgNext(p, i) : pgNext(p, i) === jm)
+    : PG.ui.tab === 'spools' ? (PG.ui.stf === 'ALL' ? pgSpoolInfo(p, i).status !== 'Installed' : pgSpoolInfo(p, i).status === PG.ui.stf) : !!pgNext(p, i);
+  const rows = base.filter(i => PG.ui.done || todo(i))
     .sort((a, b) => cmpStr(a.iso || '', b.iso || '') || cmpStr(a.spool || '', b.spool || '') || cmpStr(a.joint || a.tag || '', b.joint || b.tag || ''));
-  const stOpts = PG.ui.tab === 'spools' ? [['ALL', 'Any status'], ['In shop', 'In shop'], ['Ready', 'Ready'], ['Shipped', 'Shipped'], ['Installed', 'Installed']]
-    : [['ALL', 'Any status'], ['PEND', 'Pending']].concat(PG.ui.tab === 'joints' ? [['TOWELD', 'Fitted · to weld']] : [], [['DONE', 'Complete']]);
   const chips = it => {
     if (it.kind === 'SPOOL') { const inf = pgSpoolInfo(p, it); const c = inf.status === 'Installed' ? PG_STG.INST : inf.status === 'Shipped' ? PG_STG.SHIP : inf.status === 'Ready' ? PG_STG.FIT : null;
       return `<span class="pgc" style="${c ? `background:${c.color};color:${c.ink}` : ''}">${inf.status}</span><span class="pgsub">shop ${inf.shopW}/${inf.shop}</span>`; }
     return pgStages(it).map(s => { const m = pgM(p, it)[s]; return `<span class="pgc" style="${m ? `background:${PG_STG[s].color};color:${PG_STG[s].ink}` : ''}">${pgLabel(p, s)}${m ? ' ' + fmtDate(m.date).slice(0, 6) : ''}</span>`; }).join('');
   };
+  const what = PG.ui.tab === 'joints' ? (jm === 'FIT' ? 'not fitted yet' : 'fitted, not welded') : PG.ui.tab === 'spools' ? (PG.ui.stf === 'ALL' ? 'not installed' : PG.ui.stf) : 'pending';
   return `<div class="pgtabs">${tabs.map(t => `<button class="${PG.ui.tab === t[0] ? 'sel' : ''}" data-pgt="${t[0]}">${t[1]}</button>`).join('')}</div>
+    ${PG.ui.tab === 'joints' ? `<div class="pgjm"><span>TODAY I DO</span><div><button class="${jm === 'FIT' ? 'on fit' : ''}" data-pgjm="FIT">FIT-UP</button><button class="${jm === 'WEL' ? 'on wel' : ''}" data-pgjm="WEL">WELD</button></div></div>` : ''}
     <div class="pgtools">
       <select class="inp" id="pgIso"><option value="ALL">All ISO</option>${isos.map(i => `<option ${PG.ui.iso === i ? 'selected' : ''}>${esc(i)}</option>`).join('')}</select>
-      ${spools.length && PG.ui.tab !== 'spools' ? `<select class="inp" id="pgSpool"><option value="ALL">All spools</option>${spools.map(s => `<option value="${esc(s)}" ${PG.ui.spool === s ? 'selected' : ''}>Spool ${esc(s)}</option>`).join('')}</select>` : ''}
+      ${spools.length && PG.ui.tab !== 'spools' ? `<select class="inp" id="pgSpool"><option value="ALL">All spools</option>${spools.map(s0 => `<option value="${esc(s0)}" ${PG.ui.spool === s0 ? 'selected' : ''}>Spool ${esc(s0)}</option>`).join('')}</select>` : ''}
       ${PG.ui.tab === 'joints' ? `<select class="inp" id="pgLoc"><option value="ALL">Shop + Field</option><option value="SHOP" ${PG.ui.loc === 'SHOP' ? 'selected' : ''}>Shop</option><option value="FIELD" ${PG.ui.loc === 'FIELD' ? 'selected' : ''}>Field</option></select>` : ''}
-      <select class="inp" id="pgSt">${stOpts.map(o => `<option value="${o[0]}" ${PG.ui.stf === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>
-      <div class="search pgsearch">${icon('search')}<input id="pgQ" placeholder="Joint" value="${esc(PG.ui.q)}" enterkeyhint="search"></div>
-      <button class="btn sm" data-a="pgall">Select all (${rows.length})</button></div>
+      ${PG.ui.tab === 'spools' ? `<select class="inp" id="pgSt">${[['ALL', 'Not installed'], ['In shop', 'In shop'], ['Ready', 'Ready'], ['Shipped', 'Shipped'], ['Installed', 'Installed']].map(o => `<option value="${o[0]}" ${PG.ui.stf === o[0] ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>` : ''}
+      <div class="search pgsearch">${icon('search')}<input id="pgQ" placeholder="Joint" value="${esc(PG.ui.q)}" enterkeyhint="search"></div></div>
+    <div class="pgcount"><span>${PG.ui.done ? 'All' : 'Only <b>' + esc(what) + '</b>'} · ${rows.length} of ${base.length}</span>
+      <button class="pgtg ${PG.ui.done ? 'on' : ''}" data-a="pgdone">${PG.ui.done ? '✓ ' : ''}Show done</button><button class="pgtg" data-a="pgall">Select all</button></div>
     <div class="pglist">${rows.map(it => `<button class="pgrow ${PG.ui.sel.has(it.id) ? 'sel' : ''}" data-pgr="${esc(it.id)}">
         <span class="pgck">${icon('check')}</span>
         <span class="pgn"><b>${esc(it.kind === 'SPOOL' ? 'Spool ' + it.spool : it.joint || it.tag)}</b><small>${esc(it.iso || '')}${it.spool && it.kind !== 'SPOOL' ? ' · SP' + esc(it.spool) : ''}${it.nd ? ' · ' + it.nd + '"' : ''}${it.type ? ' · ' + esc(it.type) : ''}${it.loc ? ' · ' + (it.loc === 'FIELD' ? 'FIELD' : 'SHOP') : ''}${it.value ? ' · ' + esc(it.value) : ''}${it.desc && it.kind === 'OTHER' ? ' · ' + esc(it.desc) : ''}</small>${pgInShop(p, it) ? '<small class="pgwarn">spool in shop</small>' : ''}</span>
-        <span class="pgcs">${chips(it)}</span></button>`).join('') || '<div class="hint">Nothing to show with these filters.</div>'}</div>`;
+        <span class="pgcs">${chips(it)}</span></button>`).join('') || `<div class="hint">${PG.ui.done ? 'Nothing to show with these filters.' : 'All done here. Tap Show done to see them.'}</div>`}</div>`;
 }
 
 /* ---------------- events ---------------- */
@@ -3284,8 +3423,9 @@ async function pgClick(e) {
   if (e.target.closest('input,select,label')) return;
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   const d = b.dataset, p = pgCur();
-  if (d.pgp) { PG.ui.pid = d.pgp; PG.ui.sel = new Set(); PG.ui.iso = 'ALL'; PG.ui.spool = 'ALL'; PG.ui.q = ''; render(); return; }
+  if (d.pgp) { PG.ui.pid = d.pgp; PG.ui.sel = new Set(); PG.ui.iso = 'ALL'; PG.ui.spool = 'ALL'; PG.ui.q = ''; PG.ui.done = false; PG.ui.leg = false; render(); return; }
   if (d.pgt) { PG.ui.tab = d.pgt; PG.ui.sel = new Set(); PG.ui.stf = 'ALL'; PG.ui.spool = 'ALL'; render(); return; }
+  if (d.pgjm) { PG.ui.jm = d.pgjm; PG.ui.sel = new Set(); render(); return; }
   if (d.pgr) { if (PG.ui.sel.has(d.pgr)) PG.ui.sel.delete(d.pgr); else PG.ui.sel.add(d.pgr); pgRefresh(); return; }
   if (d.pgm) { PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => x.classList.toggle('sel', x === b)); return; }
   if (d.pgmark) {
@@ -3299,6 +3439,11 @@ async function pgClick(e) {
   }
   switch (d.a) {
     case 'pgback': ui.mode = ''; render(); break;
+    case 'pgprojects': PG.ui.pid = ''; PG.ui.sel = new Set(); render(); break;
+    case 'pgleg': PG.ui.leg = !PG.ui.leg; render(); break;
+    case 'pgvert': PG.ui.vert = true; render(); break;
+    case 'pgdone': PG.ui.done = !PG.ui.done; render(); break;
+    case 'pgfind': pgFindModal(p); break;
     case 'pgimport': pgImport(); break;
     case 'pgundo': pgUndo(); break;
     case 'send': sendToAdmin(); break;
@@ -3332,9 +3477,26 @@ function pgChange(e) {
   else if (t.id === 'pgSpool') { PG.ui.spool = t.value; render(); }
   else if (t.id === 'pgLoc') { PG.ui.loc = t.value; render(); }
   else if (t.id === 'pgSt') { PG.ui.stf = t.value; render(); }
-  else if (t.id === 'pgDate') { PG.ui.date = t.value; pgRefresh(); }
+  else if (t.id === 'pgDate') { PG.ui.date = t.value > todayStr() ? todayStr() : (t.value || todayStr()); render(); }
   else if (t.id === 'pgCrew') { PG.ui.crew = t.value; }
   else if (t.id === 'pgQ') { PG.ui.q = t.value; render(); }
+}
+/* find a strip / piece on the map: zoom to it and select it */
+function pgFindModal(p) {
+  const m = UI.modal(`<h3>${icon('search')} Find ${pgDome(p) ? 'strip or node' : 'piece'}</h3><div class="field"><input class="inp" id="pgFindIn" placeholder="${pgDome(p) ? 'S045 or N012' : 'P1-045'}" autocapitalize="characters" enterkeyhint="search"></div>
+    <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="ok">Find</button></div>`);
+  const go = () => { const v = m.querySelector('#pgFindIn').value; UI.close(); pgFindGo(p, v); };
+  m.querySelector('[data-x=no]').onclick = () => UI.close(); m.querySelector('[data-x=ok]').onclick = go;
+  m.querySelector('#pgFindIn').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  setTimeout(() => { const i = m.querySelector('#pgFindIn'); if (i) i.focus(); }, 50);
+}
+function pgFindGo(p, v) {
+  const q = String(v || '').trim().toUpperCase(); if (!q) return;
+  const it = p.items.find(i => i.id.toUpperCase() === q) || p.items.find(i => i.id.toUpperCase().includes(q));
+  if (!it || !it.pts) { UI.toast(pgDome(p) ? 'Strip not found.' : 'Piece not found.', 'err'); return; }
+  const xs = it.pts.map(c => c[0]), ys = it.pts.map(c => -c[1]), cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const z = pgDome(p) ? Math.max(18, p.geo.D * 0.22) : 44;
+  PG.ui.vb[p.id] = [cx - z / 2, cy - z / 2, z, z]; PG.ui.sel.add(it.id); render(); UI.toast(`${it.id} selected.`, 'ok');
 }
 function pgKey(e) {
   const t = e.target;
