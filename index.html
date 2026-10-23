@@ -511,6 +511,34 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgisoapp .pgsheet .pgbtns{flex-wrap:wrap}.pgisoapp .pgsheet .pgbtns .btn{flex:1 1 auto;min-width:96px}
 .pgisoapp .pgcrew{flex-direction:row;align-items:center;font-size:11px}.pgisoapp .pgcrew .inp{width:120px;min-height:40px}
 @media (orientation:landscape){.pgisoapp .pgcrew{font-size:0}.pgisoapp .pgcrew .inp{font-size:15px}}
+
+/* compact action bar (spools, flanges, other) */
+.pgsheet.pgc{padding:10px 12px calc(10px + env(safe-area-inset-bottom));max-height:none}
+.pgcrow{display:flex;align-items:center;gap:8px}
+.pgcrow .pgsum{flex:1;min-width:0}.pgcrow .pgsum b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.pgcrow .pgsum span{font-size:12px}
+.pgcrow .btn{min-height:48px;padding:0 18px;font-size:15px;flex:none}
+.pgcrow .pgx{width:48px;padding:0}
+.pgcrow2{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--muted)}
+.pglink{border:none;background:none;color:var(--q);font-weight:800;font-size:13px;padding:4px 0;text-decoration:underline}
+.pgselall{min-height:34px;height:34px;padding:0 12px;border-radius:12px;border:1.5px dashed var(--q);background:#fff;font-weight:800;font-size:12px;color:var(--q);margin-left:auto}
+.pglist2.full{padding-bottom:150px}
+/* the full lists scroll with the page (no box inside a box) */
+.pglist2.full{flex:none;overflow:visible;padding-bottom:16px}
+.pgapp:has(.pgsheet.on) .pgmain{padding-bottom:130px}
+.pgapp:has(.pgsheet.pgc.on) .pgmain{padding-bottom:110px}
+.pgcbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.pgcbtns .btn{flex:1 1 auto;min-height:48px;font-size:15px;min-width:100px}
+.pgcrewi{flex:1 1 150px;min-height:40px;font-size:15px;max-width:230px}
+.pgmapmode .pgsheet.pgc .pgsum{max-width:none}
+@media (orientation:landscape){
+  .pgsheet.pgc{display:flex;align-items:center;gap:10px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
+  .pgsheet.pgc .pgcrow{display:contents}
+  .pgsheet.pgc .pgsum{order:0;flex:0 1 210px;min-width:120px}
+  .pgsheet.pgc .pgcbtns{order:1;flex:1;margin-top:0;flex-wrap:nowrap}
+  .pgsheet.pgc .pgcbtns .btn{min-width:0}
+  .pgsheet.pgc .pgcrow2{order:2;margin-top:0;flex:none;flex-wrap:nowrap}
+  .pgsheet.pgc .pgcrewi{width:150px;flex:none}
+  .pgsheet.pgc .pgx{order:3}
+}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -929,7 +957,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.6.4';
+const APP_VERSION = '2.6.5';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -2817,11 +2845,11 @@ function pgIsoBar(p) {
   const bk = PG_BK.filter(([k]) => k !== 'B_PNT' || pgPaintJ(p)).map(([k, l]) => [k, l, G.reduce((a, g) => a + (g.kind === 'TORQUE' && k !== 'B_PEN' ? 0 : pgBackList(p, g, k).length), 0)]).filter(x => x[2]);
   const crew = fwd.some(x => x[0] === 'FIT' || x[0] === 'WEL');
   const why = one && !fwd.length ? (one.shop ? 'Spool still in shop (not shipped).' : one.lock ? 'Locked: hydro test done (only the office can change it).' : '') : '';
-  return `<div class="pgsheet ${G.length ? 'on' : ''}" id="pgbar"><div class="grab"></div>
-    <div class="pgsrow"><div class="pgsum"><b>${one ? `${one.kind === 'TORQUE' ? 'Flange' : 'Joint'} ${esc(one.joint)} · ${one.nd ? one.nd + '"' : ''} ${esc(one.type || '')}` : `${G.length} selected`}</b><span>${one ? `${one.ea > 1 ? one.ea + ' spools · ' : ''}${pgStWord(one)}${one.rep ? ` · ${one.rep} repair(s)` : ''}` : G.map(g => esc(g.joint)).join(', ')}${why ? ` · <b>${why}</b>` : ''}</span></div>
-      ${crew ? `<label class="pgcrew">Fitter / welder (optional)<input id="pgCrew" class="inp" value="${esc(PG.ui.crew)}" placeholder="Crew: JR · W-12"></label>` : ''}
-      <div class="pgbtns">${fwd.map(([s, l]) => `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}</button>`).join('')}</div>
-      <div class="pgbtns2">${bk.map(([k, l]) => `<button class="btn ghost" data-pgb="${k}">${l}</button>`).join('')}<button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
+  return `<div class="pgsheet pgc ${G.length ? 'on' : ''}" id="pgbar">
+    <div class="pgcrow"><div class="pgsum"><b>${one ? `${one.kind === 'TORQUE' ? 'Flange' : 'Joint'} ${esc(one.joint)} · ${one.nd ? one.nd + '"' : ''} ${esc(one.type || '')}` : `${G.length} selected`}</b><span>${one ? `${one.ea > 1 ? one.ea + ' spools · ' : ''}${pgStWord(one)}${one.rep ? ` · ${one.rep} repair(s)` : ''}` : G.map(g => esc(g.joint)).join(', ')}${why ? ` · <b>${why}</b>` : ''}</span></div>
+      <button class="btn ghost pgx" data-a="pgclear" aria-label="Clear">✕</button></div>
+    ${fwd.length ? `<div class="pgcbtns">${fwd.map(([s, l]) => `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}</button>`).join('')}</div>` : ''}
+    ${crew || bk.length ? `<div class="pgcrow2">${crew ? `<input id="pgCrew" class="inp pgcrewi" value="${esc(PG.ui.crew)}" placeholder="Crew (optional): JR · W-12">` : ''}${bk.map(([k, l]) => `<button class="pglink" data-pgb="${k}">${l}</button>`).join('')}</div>` : ''}</div>`;
 }
 const PG_REP_WHY = `<p class="msub">The joint goes back to "to weld". It does not add inch-dia again; the repair is counted apart.</p>
   <div class="mlabel">REASON</div><div class="pgwhy">${['RT', 'UT', 'Visual', 'PT', 'Other'].map(w => `<button class="${w === 'RT' ? 'on' : ''}" data-why="${w}">${w}</button>`).join('')}</div>
@@ -2882,7 +2910,8 @@ function pgSpools(p) {
   const rows = SP.filter(s => st === 'ALL' || info.get(s.id).status === st || PG.ui.sel.has(s.id)).sort((a, b) => cmpStr(a.iso, b.iso) || cmpStr(a.spool, b.spool));
   const col = { 'In shop': ['#E3E1EC', '#1C0B5B'], Ready: [PG_STG.FIT.color, PG_STG.FIT.ink], Shipped: [PG_STG.SHIP.color, '#fff'], Installed: [PG_STG.INST.color, '#fff'] };
   let last = '';
-  return `<div class="pgchips">${[['Ready', 'Ready to ship'], ['Shipped', 'Shipped'], ['Installed', 'Installed'], ['In shop', 'In shop'], ['ALL', 'All']].map(([k, l]) => `<button class="${st === k ? 'on' : ''}" data-pgst="${k}">${l} · ${cnt(k)}</button>`).join('')}</div>
+  const selAll = rows.length > 1 ? `<button class="pgselall" data-a="pgall">✓ Select all ${rows.length}</button>` : '';
+  return `<div class="pgchips">${[['Ready', 'Ready to ship'], ['Shipped', 'Shipped'], ['Installed', 'Installed'], ['In shop', 'In shop'], ['ALL', 'All']].map(([k, l]) => `<button class="${st === k ? 'on' : ''}" data-pgst="${k}">${l} · ${cnt(k)}</button>`).join('')}${selAll}</div>
     <div class="pglist2 full">${rows.map(s => { const i = info.get(s.id), c = col[i.status], h = s.iso !== last ? `<div class="pgsec">${esc(s.iso)}</div>` : ''; last = s.iso;
       return h + `<button class="pgjr ${PG.ui.sel.has(s.id) ? 'sel' : ''}" data-pgr="${esc(s.id)}"><span class="pgsq" style="background:${c[0]}"></span><b>SP${esc(s.spool)}</b><span class="d">shop ${i.shopW}/${i.shop}${i.field ? ` · field ${i.fieldW}/${i.field}` : ''}${pgM(p, s).PNT ? ' · painted' : ''}</span><span class="c"><span class="pgst" style="background:${c[0]};color:${c[1]}">${i.status}</span></span></button>`; }).join('') || '<div class="hint">No spools here.</div>'}</div>`;
 }
@@ -2890,7 +2919,7 @@ function pgSimple(p, kind) {
   const st = kind === 'TORQUE' ? 'TRQ' : 'INS', all = PG.ui.f === 'all', L = p.items.filter(i => i.kind === kind);
   const todo = i => pgNext(p, i) === st, rows = L.filter(i => all || todo(i) || PG.ui.sel.has(i.id)).sort((a, b) => cmpStr(a.iso || '', b.iso || '') || cmpStr(a.spool || '', b.spool || '') || cmpStr(a.tag || '', b.tag || ''));
   let last = '';
-  return `<div class="pgchips"><button class="${all ? '' : 'on'}" data-pgf="todo">To do · ${L.filter(todo).length}</button><button class="${all ? 'on' : ''}" data-pgf="all">All · ${L.length}</button></div>
+  return `<div class="pgchips"><button class="${all ? '' : 'on'}" data-pgf="todo">To do · ${L.filter(todo).length}</button><button class="${all ? 'on' : ''}" data-pgf="all">All · ${L.length}</button>${rows.length > 1 ? `<button class="pgselall" data-a="pgall">✓ Select all ${rows.length}</button>` : ''}</div>
     <div class="pglist2 full">${rows.map(i => { const h = (i.iso || '') !== last ? `<div class="pgsec">${esc(i.iso || '—')}</div>` : ''; last = i.iso || ''; const dn = !!pgM(p, i)[st];
       return h + `<button class="pgjr ${PG.ui.sel.has(i.id) ? 'sel' : ''}" data-pgr="${esc(i.id)}"><span class="pgsq" style="background:${dn ? PG_STG[st].color : '#fff'}"></span><b>${esc(i.tag)}</b><span class="d">${i.spool ? 'SP' + esc(i.spool) + ' · ' : ''}${i.nd ? i.nd + '" · ' : ''}${esc(i.value || i.desc || '')}</span><span class="c">${dn ? (kind === 'TORQUE' ? 'torqued' : 'installed') : 'to do'}</span></button>`; }).join('') || `<div class="hint">${all ? 'Nothing here.' : 'All done. Tap All.'}</div>`}</div>`;
 }
@@ -2910,10 +2939,11 @@ function pgItemBar(p) {
     if (L.length) { fwd.push([s, k === 'TORQUE' ? 'Torque ✓' : 'Installed ✓', L.filter(i => pgNext(p, i) === s).length]); bk.push(['B_PEN', '← Pending', L.filter(i => pgM(p, i)[s]).length]); } });
   const F = fwd.filter(x => x[2]), B = bk.filter(x => x[2]);
   const auto = sp.some(s => inf.get(s.id).status === 'Shipped' && inf.get(s.id).field) ? 'Installed goes by itself when its field joints are welded.' : sp.some(s => inf.get(s.id).status === 'In shop') ? 'Ready goes by itself when its shop joints are welded.' : '';
-  return `<div class="pgsheet ${items.length ? 'on' : ''}" id="pgbar"><div class="grab"></div>
-    <div class="pgsrow"><div class="pgsum"><b>${items.length === 1 ? esc(sp.length ? `${items[0].iso} · SP${items[0].spool}` : items[0].tag) : `${items.length} selected`}</b><span>${sp.length === 1 ? inf.get(sp[0].id).status : ''}${auto ? ` · ${auto}` : ''}</span></div>
-      <div class="pgbtns">${F.map(([s, l, n]) => `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` (${n})` : ''}</button>`).join('')}</div>
-      <div class="pgbtns2">${B.map(([k, l]) => `<button class="btn ghost" data-pgb="${k}">${l}</button>`).join('')}<button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
+  return `<div class="pgsheet pgc ${items.length ? 'on' : ''}" id="pgbar">
+    <div class="pgcrow"><div class="pgsum"><b>${items.length === 1 ? esc(sp.length ? `${items[0].iso} · SP${items[0].spool}` : items[0].tag) : `${items.length} selected`}</b><span>${sp.length === 1 ? inf.get(sp[0].id).status : ''}</span></div>
+      ${F.map(([s, l, n]) => `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` · ${n}` : ''}</button>`).join('')}
+      <button class="btn ghost pgx" data-a="pgclear" aria-label="Clear">✕</button></div>
+    ${B.length || auto ? `<div class="pgcrow2">${B.map(([k, l]) => `<button class="pglink" data-pgb="${k}">${l}</button>`).join('')}${auto ? `<span>${auto}</span>` : ''}</div>` : ''}</div>`;
 }
 async function pgItemBack(p, kind) {
   const items = pgSelItems(p);
