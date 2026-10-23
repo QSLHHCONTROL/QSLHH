@@ -546,6 +546,13 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgsigimg{width:100%;height:110px;object-fit:contain;border:1.5px solid #E3E1EC;border-radius:14px;background:#fff;margin:4px 0 8px}
 .pgdnact{display:flex;gap:6px;flex:none}
 .pgsm:has(.pgdnact){flex-wrap:wrap;row-gap:6px}.pgsm .pgdnact{width:100%;justify-content:flex-end}
+
+/* delivery notes: tag next to the status, "No note" filter, void */
+.pgdnt{display:inline-block;background:#E8F6EE;color:#1E5631;border:1px solid #2E9D5B;border-radius:9px;padding:2px 6px;font-size:10.5px;font-weight:800;margin-right:5px;vertical-align:middle}
+.pgnn{min-height:34px;height:34px;padding:0 12px;border-radius:12px;border:1.5px solid #FF6A00;background:#FFF4EC;color:#C24E00;font-weight:800;font-size:12px}
+.pgnn.on{background:#FF6A00;color:#fff}
+.pgvb{color:#C2185B;border-color:#C2185B;background:#fff}.pgvb2{background:#C2185B;border-color:#C2185B;color:#fff}
+.pgvoid{opacity:.62}.pgvt{background:#C2185B;color:#fff;border-radius:7px;padding:1px 6px;font-size:10px;font-weight:800;vertical-align:middle}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -964,7 +971,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '2.7.2';
 const QSL = {
   company: 'Quality Services Ltd.',
   phone: 'Phone: (242) 352-7664',
@@ -2448,7 +2455,7 @@ async function pgClick(e) {
   if (d.st && p) { const i = document.getElementById(d.st); if (i) { const v = Math.max(0, Math.min(Number(i.dataset.max), (Number(i.value) || 0) + Number(d.d))); i.value = String(Math.round(v * 2) / 2); } return; }
   if (d.pgact) { PG.ui.act = d.pgact; PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); PG.ui.done = false; PG.ui.iso = 'ALL'; PG.ui.spool = 'ALL'; PG.ui.stf = d.pgact === 'SPOOLS' ? 'Ready' : 'ALL'; PG.ui.f = 'todo'; render(); return; }
   if (d.pgf) { PG.ui.f = d.pgf; PG.ui.sel = new Set(); render(); return; }
-  if (d.pgst) { PG.ui.stf = d.pgst; PG.ui.sel = new Set(); render(); return; }
+  if (d.pgst) { PG.ui.stf = d.pgst; PG.ui.nonote = false; PG.ui.sel = new Set(); render(); return; }
   if (d.pgb && p) { if (pgIsoMode(p)) pgIsoBack(p, d.pgb); else pgItemBack(p, d.pgb); return; }
   if (d.pgiso) { PG.ui.isoV = d.pgiso; PG.ui.sel = new Set(); PG.ui.f = 'todo'; render(); return; }
   if (d.za) { PG.ui.zAct = d.za; pgRefresh(); return; }
@@ -2476,7 +2483,8 @@ async function pgClick(e) {
     case 'pgback': ui.mode = ''; render(); break;
     case 'pgprojects': PG.ui.pid = ''; PG.ui.sel = new Set(); PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.perSpool = false; render(); break;
     case 'pgshipany': pgShipAnyway(p); break;
-    case 'pgdnnew': pgDnForm(p, pgSelItems(p).filter(i => i.kind === 'SPOOL' && pgM(p, i).SHIP).map(i => i.id)); break;
+    case 'pgdnnew': pgDnNew(p); break;
+    case 'pgnonote': PG.ui.nonote = !PG.ui.nonote; PG.ui.sel = new Set(); render(); break;
     case 'pgdnlist': pgDnList(p); break;
     case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
     case 'pgisos': PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
@@ -2916,17 +2924,25 @@ async function pgIsoBack(p, kind) {
 }
 
 /* ---------------- spools, torque and other items: grouped by ISO ---------------- */
+/* delivery notes of this phone: a void note does not count (its spools go back to "no note") */
+const pgDnActive = p => (PG.S.dn || []).filter(d => d.pid === p.id && !d.void);
+const pgDnOf = (p, id) => pgDnActive(p).find(d => (d.spools || []).includes(id)) || null;
+const pgDnSeq = no => String(no || '').split('-').pop();
 function pgSpools(p) {
   const st = PG.ui.stf || 'Ready', SP = p.items.filter(i => i.kind === 'SPOOL'), info = new Map(SP.map(s => [s.id, pgSpoolInfo(p, s)]));
   const cnt = k => SP.filter(s => k === 'ALL' || info.get(s.id).status === k).length;
-  const rows = SP.filter(s => st === 'ALL' || info.get(s.id).status === st || PG.ui.sel.has(s.id)).sort((a, b) => cmpStr(a.iso, b.iso) || cmpStr(a.spool, b.spool));
+  const nn = st === 'Shipped' && !!PG.ui.nonote;
+  const rows = SP.filter(s => (st === 'ALL' || info.get(s.id).status === st || PG.ui.sel.has(s.id)) && (!nn || !pgDnOf(p, s.id) || PG.ui.sel.has(s.id))).sort((a, b) => cmpStr(a.iso, b.iso) || cmpStr(a.spool, b.spool));
   const col = { 'In shop': ['#E3E1EC', '#1C0B5B'], Ready: [PG_STG.FIT.color, PG_STG.FIT.ink], Shipped: [PG_STG.SHIP.color, '#fff'], Installed: [PG_STG.INST.color, '#fff'] };
   let last = '';
   const nDn = (PG.S.dn || []).filter(d => d.pid === p.id).length;
-  const selAll = (rows.length > 1 ? `<button class="pgselall" data-a="pgall">✓ Select all ${rows.length}</button>` : '') + (nDn ? `<button class="pgselall" data-a="pgdnlist">📄 Notes · ${nDn}</button>` : '');
+  const nFree = SP.filter(s => info.get(s.id).status === 'Shipped' && !pgDnOf(p, s.id)).length;
+  const selAll = (rows.length > 1 ? `<button class="pgselall" data-a="pgall">✓ Select all ${rows.length}</button>` : '')
+    + (st === 'Shipped' && nDn ? `<button class="pgnn ${nn ? 'on' : ''}" data-a="pgnonote">No note · ${nFree}${nn ? ' ✓' : ''}</button>` : '')
+    + (nDn ? `<button class="pgselall" data-a="pgdnlist">📄 Notes · ${nDn}</button>` : '');
   return `<div class="pgchips">${[['Ready', 'Ready to ship'], ['Shipped', 'Shipped'], ['Installed', 'Installed'], ['In shop', 'In shop'], ['ALL', 'All']].map(([k, l]) => `<button class="${st === k ? 'on' : ''}" data-pgst="${k}">${l} · ${cnt(k)}</button>`).join('')}${selAll}</div>
     <div class="pglist2 full">${rows.map(s => { const i = info.get(s.id), c = col[i.status], h = s.iso !== last ? `<div class="pgsec">${esc(s.iso)}</div>` : ''; last = s.iso;
-      return h + `<button class="pgjr ${PG.ui.sel.has(s.id) ? 'sel' : ''}" data-pgr="${esc(s.id)}"><span class="pgsq" style="background:${c[0]}"></span><b>SP${esc(s.spool)}</b><span class="d">shop ${i.force ? `<b class="pgwarn2">${i.shopW}/${i.shop} ⚠</b>` : `${i.shopW}/${i.shop}`}${i.field ? ` · field ${i.fieldW}/${i.field}` : ''}${pgM(p, s).PNT ? ' · painted' : ''}</span><span class="c"><span class="pgst" style="background:${c[0]};color:${c[1]}">${i.status}${i.force ? ` ⚠ ${i.left.length}` : ''}</span></span></button>`; }).join('') || '<div class="hint">No spools here.</div>'}</div>`;
+      return h + `<button class="pgjr ${PG.ui.sel.has(s.id) ? 'sel' : ''}" data-pgr="${esc(s.id)}"><span class="pgsq" style="background:${c[0]}"></span><b>SP${esc(s.spool)}</b><span class="d">shop ${i.force ? `<b class="pgwarn2">${i.shopW}/${i.shop} ⚠</b>` : `${i.shopW}/${i.shop}`}${i.field ? ` · field ${i.fieldW}/${i.field}` : ''}${pgM(p, s).PNT ? ' · painted' : ''}</span><span class="c">${pgDnOf(p, s.id) ? `<span class="pgdnt">📄 ${esc(pgDnSeq(pgDnOf(p, s.id).no))}</span>` : ''}<span class="pgst" style="background:${c[0]};color:${c[1]}">${i.status}${i.force ? ` ⚠ ${i.left.length}` : ''}</span></span></button>`; }).join('') || '<div class="hint">No spools here.</div>'}</div>`;
 }
 function pgSimple(p, kind) {
   const st = kind === 'TORQUE' ? 'TRQ' : 'INS', all = PG.ui.f === 'all', L = p.items.filter(i => i.kind === kind);
@@ -3116,15 +3132,42 @@ async function pgDnShare(p, dn) {
 }
 function pgDnList(p) {
   const L = (PG.S.dn || []).filter(d => d.pid === p.id).sort((a, b) => cmpStr(b.no, a.no));
-  const m = UI.modal(`<h3>📄 Delivery notes · ${esc(p.name)}</h3><div class="pgsml">${L.map(d => `<div class="pgsm"><div><b>${esc(d.no)}</b><span>${fmtDate(d.date)} · ${d.spools.length} spool(s) · ${d.sig2 ? 'received ✓' : 'not received yet'}${d.sent ? '' : ' · not sent'}</span></div>
-      <span class="pgdnact"><button class="btn sm" data-dpdf="${d.uid}">PDF</button>${d.sig2 ? '' : `<button class="btn sm ghost" data-dsig="${d.uid}">✍ Receiver</button>`}</span></div>`).join('') || '<p class="msub">No delivery notes yet.</p>'}</div>
+  const m = UI.modal(`<h3>📄 Delivery notes · ${esc(p.name)}</h3><div class="pgsml">${L.map(d => d.void
+      ? `<div class="pgsm pgvoid"><div><b><s>${esc(d.no)}</s> <span class="pgvt">VOID</span></b><span>${fmtDate(d.date)} · ${d.spools.length} spool(s) · void${d.void.by ? ' by ' + esc(d.void.by) : ''}${d.void.why ? ' · ' + esc(d.void.why) : ''}${d.sent ? '' : ' · not sent'}</span></div>
+      <span class="pgdnact"><button class="btn sm" data-dpdf="${d.uid}">PDF</button></span></div>`
+      : `<div class="pgsm"><div><b>${esc(d.no)}</b><span>${fmtDate(d.date)} · ${d.spools.length} spool(s) · ${d.sig2 ? 'received ✓' : 'not received yet'}${d.sent ? '' : ' · not sent'}</span></div>
+      <span class="pgdnact"><button class="btn sm" data-dpdf="${d.uid}">PDF</button>${d.sig2 ? '' : `<button class="btn sm ghost" data-dsig="${d.uid}">✍ Receiver</button>`}<button class="btn sm pgvb" data-dvoid="${d.uid}">🚫 Void</button></span></div>`).join('') || '<p class="msub">No delivery notes yet.</p>'}</div>
     <div class="mbtns"><button class="btn primary" data-x="ok">Close</button></div>`);
   m.addEventListener('click', e => {
-    const b = e.target.closest('[data-dpdf],[data-dsig],[data-x]'); if (!b) return;
+    const b = e.target.closest('[data-dpdf],[data-dsig],[data-dvoid],[data-x]'); if (!b) return;
     if (b.dataset.x) { UI.close(); return; }
-    const d = L.find(x => x.uid === (b.dataset.dpdf || b.dataset.dsig)); if (!d) return;
-    UI.close(); if (b.dataset.dpdf) pgDnShare(p, d); else pgDnSign(p, d);
+    const d = L.find(x => x.uid === (b.dataset.dpdf || b.dataset.dsig || b.dataset.dvoid)); if (!d) return;
+    UI.close(); if (b.dataset.dpdf) pgDnShare(p, d); else if (b.dataset.dvoid) pgDnVoid(p, d); else pgDnSign(p, d);
   });
+}
+/* void a note made by mistake: it stays in the list crossed out (the Admin sees it); its spools stay shipped and go back to "no note" */
+function pgDnVoid(p, d) {
+  const m = UI.modal(`<h3>🚫 Void ${esc(d.no)}?</h3><p class="msub">The note stays in the list crossed out (the Admin sees it). Its ${d.spools.length} spool(s) stay shipped and go back to “No note”.</p>
+    <div class="field"><label>Reason (required)</label><input class="inp" id="dvWhy" placeholder="e.g. wrong spools" style="font-size:16px"></div>
+    <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn pgvb2" data-x="ok">Void</button></div>`, { locked: true });
+  m.querySelector('[data-x=no]').onclick = () => { UI.close(); pgDnList(p); };
+  m.querySelector('[data-x=ok]').onclick = async () => {
+    const why = m.querySelector('#dvWhy').value.trim(); if (!why) { UI.toast('Write the reason.', 'err'); return; }
+    d.void = { date: PG.ui.date || todayStr(), by: S.sup || '', why, at: new Date().toISOString() }; d.sent = false;
+    await pgSave(); UI.close(); render(); UI.toast(`${d.no} void.`, 'ok');
+  };
+}
+/* a new note from the selection: the spools already in another note are left out (warned first) */
+function pgDnNew(p) {
+  const L = pgSelItems(p).filter(i => i.kind === 'SPOOL' && pgM(p, i).SHIP);
+  const inN = L.filter(i => pgDnOf(p, i.id)), free = L.filter(i => !pgDnOf(p, i.id));
+  if (!inN.length) { pgDnForm(p, free.map(i => i.id)); return; }
+  const m = UI.modal(`<h3>⚠ Already in a note</h3><p class="msub">These spools are already in another delivery note. They are left out of the new one.</p>
+    <div class="pgsml">${inN.map(sp => `<div class="pgsm"><div><b>${esc(sp.iso)} · SP${esc(sp.spool)}</b><span>📄 ${esc(pgDnOf(p, sp.id).no)}</span></div></div>`).join('')}</div>
+    <p class="msub" style="margin-top:8px">${free.length ? `The new note takes <b>${free.length} spool(s)</b>: ${free.map(sp => 'SP' + esc(sp.spool)).join(', ')}.` : 'Nothing is left for a new note.'}</p>
+    <div class="mbtns"><button class="btn ghost" data-x="no">${free.length ? 'Cancel' : 'Close'}</button>${free.length ? `<button class="btn primary" data-x="ok">Continue · ${free.length} spool(s)</button>` : ''}</div>`);
+  m.querySelector('[data-x=no]').onclick = () => UI.close();
+  const ok = m.querySelector('[data-x=ok]'); if (ok) ok.onclick = () => { UI.close(); pgDnForm(p, free.map(i => i.id)); };
 }
 
 function pgPipingNew(p) {
@@ -3192,6 +3235,8 @@ function dnPdf(p, dn, ctx) {
   doc.autoTable({ startY: y, theme: 'plain', margin: { left: L, right: L }, body: [[info[0][0], info[0][1], info[1][0], info[1][1]], [info[2][0], info[2][1], info[3][0], info[3][1]], [info[4][0], info[4][1], info[5][0], info[5][1]]],
     styles: { fontSize: 9, cellPadding: 1.6, textColor: 20, overflow: 'linebreak' }, columnStyles: { 0: { fontStyle: 'bold', cellWidth: 26, textColor: nav }, 1: { cellWidth: 72 }, 2: { fontStyle: 'bold', cellWidth: 26, textColor: nav } } });
   y = doc.lastAutoTable.finalY + 4;
+  if (dn.void) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(194, 24, 91);
+    const vt = doc.splitTextToSize(`VOID · ${fmtDate(dn.void.date)}${dn.void.by ? ' · by ' + dn.void.by : ''}${dn.void.why ? ' · reason: ' + dn.void.why : ''}`, Rm - L); doc.text(vt, L, y + 3); y += 4.6 * vt.length + 2; doc.setTextColor(0); }
   const body = R.map((r, k) => [String(k + 1), r.sp.iso, 'SP' + r.sp.spool, `${r.shopW} / ${r.shop}${r.left.length ? ' !' : ''}`, String(r.field),
     r.left.length ? `Shipped incomplete · ${r.left.map(i => i.joint).join(', ')} pending${r.why ? ' · reason: ' + r.why : ''}` : 'Complete']);
   body.push(['', 'TOTAL', `${R.length} spools`, `${R.reduce((a, r) => a + r.shopW, 0)} / ${R.reduce((a, r) => a + r.shop, 0)}`, String(R.reduce((a, r) => a + r.field, 0)), '']);
@@ -3279,6 +3324,12 @@ function dnPdf(p, dn, ctx) {
     doc.setPage(i); const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(0);
     doc.text(`Page ${i} of ${n}`, 8, PH - 5);
+    if (dn.void) {            /* a void note keeps its pages, crossed by a big VOID */
+      try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.22 })); } catch (e) { /* no transparency */ }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(110); doc.setTextColor(194, 24, 91); doc.text('VOID', PW / 2, PH / 2 + 15, { align: 'center', angle: 30 });
+      try { doc.restoreGraphicsState(); } catch (e) { /* nothing */ }
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(0);
+    }
     const lb = 'Powered by EP', tw = doc.getTextWidth(lb);
     doc.addImage(LOGO_EP, 'PNG', PW - 8 - 4.2, PH - 8.2, 4.2, 4.2); doc.text(lb, PW - 8 - 5.2 - tw, PH - 5);
   }
