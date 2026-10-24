@@ -997,7 +997,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.9.4';
+const APP_VERSION = '2.9.5';
 /* spool name for people: 01 -> SP01 · a piece of an ISO (P1, 01-P2) keeps its name */
 const spLbl = s => !s ? '' : String(s).replace(/(^|-)REST$/, '$1Rest').replace(/^(\d+)$/, 'SP$1').replace(/^(\d+-)/, 'SP$1');
 /* highlighter of a section of an ISO: the finger line becomes straight runs in the directions of the drawing (every 15°: 0°, 30°, 90°…) */
@@ -2949,7 +2949,8 @@ function pgPartial(p, iso) {
 const PG_HL = '#FF6A00';
 const pgPieceShipOk = (p, iso) => { const SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === (iso || PG.ui.isoV)); return SP.length > 0 && SP.every(s => cpOf(s) === '01') && p.items.some(i => i.kind === 'JOINT' && i.iso === (iso || PG.ui.isoV) && pgFreeJoint(p, i)); };
 /* a whole spool (or the rest of an ISO) that can still be split: EA 1 and a drawing with its joints */
-const pgSplittable = (p, sp) => sp && sp.kind === 'SPOOL' && /^(\d+|REST)$/.test(sp.spool) && pgPieceShipOk(p, sp.iso) && !!((p.dwx || {})['ISO:' + sp.iso]);
+const pgBubblesOk = (p, iso) => { const d = (p.dwx || {})['ISO:' + iso]; if (!d) return false; const mk = d.mk || {}; return p.items.filter(i => i.kind === 'JOINT' && i.iso === iso && cpOf(i) === '01').every(i => mk[i.joint]); };
+const pgSplittable = (p, sp) => sp && sp.kind === 'SPOOL' && /^(\d+|REST)$/.test(sp.spool) && pgPieceShipOk(p, sp.iso) && pgBubblesOk(p, sp.iso);
 function pgBands(p, iso) {
   const L = (p.pzl || {})[iso] || {}, SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === iso);
   const days = Array.from(new Set(SP.map(s => (pgM(p, s).SHIP || {}).date).filter(Boolean))).sort();
@@ -2984,7 +2985,7 @@ function pgTruckBar(p) {
   const q = PG.ui.q, last = q.i + 1 === q.list.length;
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean).filter(g => pgFreeJoint(p, g.items[0]));
   return `<div class="pgsheet pgc on" id="pgbar">
-    <div class="pgcrow"><div class="pgsum"><b>🚚 ${esc(q.list[q.i].iso)} · ${q.i + 1} of ${q.list.length}</b><span>${G.length ? `${G.length} joint(s) under the line: ${G.map(g => esc(g.joint)).join(' · ')}` : 'Pass your finger over the pipe that leaves.'}</span></div>
+    <div class="pgcrow"><div class="pgsum"><b>🚚 ${esc(q.list[q.i].iso)} · ${q.i + 1} of ${q.list.length}</b><span>${G.length ? `Joints: ${G.map(g => esc(g.joint)).join(' · ')}${(() => { const sh = G.filter(g => g.loc === 'SHOP'), w = sh.filter(g => pgM(p, g.items[0]).WEL).length; return sh.length ? ` · shop welded ${w}/${sh.length}` : ''; })()}` : 'Pass your finger over the pipe that leaves.'}</span></div>
 </div>
     <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase</button><button class="btn ghost" data-a="pgtrkwhole">Whole ISO</button><button class="btn" data-a="pgtrksec" ${G.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">${last ? (q.list.length > 1 ? 'Ship all ✓' : 'Ship ✓') : 'Next →'}</button></div></div>`;
 }
@@ -3229,7 +3230,8 @@ function pgItemBar(p) {
   ['TORQUE', 'OTHER'].forEach(k => { const L = items.filter(i => i.kind === k), s = k === 'TORQUE' ? 'TRQ' : 'INS';
     if (L.length) { fwd.push([s, k === 'TORQUE' ? 'Torque ✓' : 'Installed ✓', L.filter(i => pgNext(p, i) === s).length]); bk.push(['B_PEN', '← Pending', L.filter(i => pgM(p, i)[s]).length]); } });
   const F = fwd.filter(x => x[2]), B = bk.filter(x => x[2]);
-  const auto = sp.some(s => inf.get(s.id).status === 'Shipped' && inf.get(s.id).field) ? 'Installed goes by itself when its field joints are welded.' : sp.some(s => inf.get(s.id).status === 'In shop') ? 'Ready goes by itself when its shop joints are welded.' : '';
+  const noBub = sp.length === 1 && /^(\d+|REST)$/.test(sp[0].spool) && pgPieceShipOk(p, sp[0].iso) && (p.dwx || {})['ISO:' + sp[0].iso] && !pgBubblesOk(p, sp[0].iso) && ['Ready', 'In shop'].includes(inf.get(sp[0].id).status);
+  const auto = noBub ? 'To ship only a section, every joint of this ISO must be placed on its drawing (Admin → Drawings).' : sp.some(s => inf.get(s.id).status === 'Shipped' && inf.get(s.id).field) ? 'Installed goes by itself when its field joints are welded.' : sp.some(s => inf.get(s.id).status === 'In shop') ? 'Ready goes by itself when its shop joints are welded.' : '';
   return `<div class="pgsheet pgc ${items.length ? 'on' : ''}" id="pgbar">
     <div class="pgcrow"><div class="pgsum"><b>${items.length === 1 ? esc(sp.length ? `${items[0].iso} · ${spLbl(items[0].spool)}` : items[0].tag) : `${items.length} selected`}</b><span>${sp.length === 1 ? inf.get(sp[0].id).status : ''}</span></div>
       ${F.map(([s, l, n]) => s === 'SEC' ? `<button class="btn pgsecb" data-a="pgsec">${l}</button>` : s === 'SHIPANY' ? `<button class="btn pgany" data-a="pgshipany">${l}${items.length > 1 ? ` · ${n}` : ''}</button>` : s === 'DN' ? `<button class="btn pgdnb" data-a="pgdnnew">${l}</button>` : `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` · ${n}` : ''}</button>`).join('')}
@@ -3385,7 +3387,7 @@ function pgDnSign(p, dn) {
 }
 async function pgDnShare(p, dn) {
   try {
-    const doc = dnPdf(p, dn, { getM: it => pgM(p, it), dwx: iso => (p.dwx || {})['ISO:' + iso] || null, bands: (iso, sps) => pgBands(p, iso).filter(b => sps.includes(b.nm)) });
+    const doc = await dnPdf(p, dn, { getM: it => pgM(p, it), dwx: iso => (p.dwx || {})['ISO:' + iso] || null, mat: iso => (p.mats || {})[iso] || '', bands: (iso, sps) => pgBands(p, iso).filter(b => sps.includes(b.nm)) });
     const fname = `${dn.no}.pdf`, how = await shareOrDownload(doc.output('blob'), fname, `Delivery note ${dn.no}`);
     if (how !== 'cancelled') UI.toast(how === 'shared' ? 'Delivery note shared.' : `Saved: ${fname}`, 'ok');
   } catch (e) { UI.alert('Delivery note', 'The PDF could not be made.\n' + (e.message || e)); }
@@ -3504,7 +3506,7 @@ function pgWeighted(p) {
 
 /* =====================================================================
    QSL PROGRESS · SPOOL DELIVERY NOTE (PDF). Shared by the field app and the Admin.
-   ctx = { getM(it) → marks of an item, dwx(iso) → { img, w, h, bs, mk } | null }
+   ctx = { getM(it), dwx(iso) → { img, w, h, bs, mk } | null, bands(iso, spools) → highlighted sections, mat(iso) → material }
    Powered by EP
    ===================================================================== */
 'use strict';
@@ -3513,16 +3515,32 @@ function pgWeighted(p) {
 function dnRows(p, dn, ctx) {
   return (dn.spools || []).map(id => p.items.find(i => i.id === id)).filter(Boolean).map(sp => {
     const J = p.items.filter(i => i.kind === 'JOINT' && i.iso === sp.iso && i.spool === sp.spool);
-    const shop = J.filter(i => i.loc === 'SHOP'), field = J.filter(i => i.loc === 'FIELD');
-    const left = shop.filter(i => !(ctx.getM(i) || {}).WEL), m = ctx.getM(sp) || {}, sh = m.SHIP || {};
-    return { sp, shop: shop.length, shopW: shop.length - left.length, field: field.length, left, force: !!sh.force || left.length > 0, why: sh.note || '' };
+    const shop = J.filter(i => i.loc === 'SHOP'), left = shop.filter(i => !(ctx.getM(i) || {}).WEL), m = ctx.getM(sp) || {}, sh = m.SHIP || {};
+    const nds = J.map(i => i.nd || 0).filter(Boolean), lo = Math.min(...nds), hi = Math.max(...nds);
+    const size = nds.length ? (lo === hi ? `${hi}"` : `${lo}"–${hi}"`) : '';
+    const mat = ctx.mat ? ctx.mat(sp.iso) : '';
+    const whole = /^\d+$/.test(sp.spool), others = p.items.filter(i => i.kind === 'SPOOL' && i.iso === sp.iso && i.id !== sp.id && !(dn.spools || []).includes(i.id));
+    return { sp, left, why: sh.note || '', desc: [size ? `${size} spool` : 'Spool', mat].filter(Boolean).join(' · '), section: !whole && others.length > 0 };
   });
 }
+const dnObs = r => [r.section ? 'Section of the ISO (the rest is not in this note)' : '', r.left.length ? `Shipped incomplete: shop joint(s) ${r.left.map(i => i.joint).join(', ')} to weld on site${r.why ? ' · reason: ' + r.why : ''}` : ''].filter(Boolean).join(' · ') || '—';
 const dnHM = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const dnDay = iso => { const d = new Date(iso); return isNaN(d) ? '' : todayStr(d); };
 const dnImgFmt = s => /^data:image\/png/i.test(String(s)) ? 'PNG' : 'JPEG';
+/* the drawing with the section of this note shaded inside the picture (light and thin: everything under it can be read) */
+async function dnCompose(d, bands) {
+  if (!bands.length) return { url: d.img, fmt: dnImgFmt(d.img) };
+  try {
+    const im = await new Promise((ok, ko) => { const x = new Image(); x.onload = () => ok(x); x.onerror = ko; x.src = d.img; });
+    const k = Math.min(1, 2200 / im.width), c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+    g.globalAlpha = 0.38; g.globalCompositeOperation = 'multiply'; g.strokeStyle = '#8E5CD9'; g.lineWidth = c.width / 110; g.lineCap = 'round'; g.lineJoin = 'round';
+    bands.forEach(b => { g.beginPath(); b.pts.forEach((q, i) => (i ? g.lineTo(q[0] * c.width, q[1] * c.height) : g.moveTo(q[0] * c.width, q[1] * c.height))); g.stroke(); });
+    return { url: c.toDataURL('image/jpeg', 0.85), fmt: 'JPEG' };
+  } catch (e) { return { url: d.img, fmt: dnImgFmt(d.img) }; }
+}
 
-function dnPdf(p, dn, ctx) {
+async function dnPdf(p, dn, ctx) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const R = dnRows(p, dn, ctx), nav = '#1C0B5B';
@@ -3538,17 +3556,15 @@ function dnPdf(p, dn, ctx) {
   y = doc.lastAutoTable.finalY + 4;
   if (dn.void) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(194, 24, 91);
     const vt = doc.splitTextToSize(`VOID · ${fmtDate(dn.void.date)}${dn.void.by ? ' · by ' + dn.void.by : ''}${dn.void.why ? ' · reason: ' + dn.void.why : ''}`, Rm - L); doc.text(vt, L, y + 3); y += 4.6 * vt.length + 2; doc.setTextColor(0); }
-  const body = R.map((r, k) => [String(k + 1), r.sp.iso, spLbl(r.sp.spool), `${r.shopW} / ${r.shop}${r.left.length ? ' !' : ''}`, String(r.field),
-    r.left.length ? `Shipped incomplete · ${r.left.map(i => i.joint).join(', ')} pending${r.why ? ' · reason: ' + r.why : ''}` : 'Complete']);
-  body.push(['', 'TOTAL', `${R.length} spools`, `${R.reduce((a, r) => a + r.shopW, 0)} / ${R.reduce((a, r) => a + r.shop, 0)}`, String(R.reduce((a, r) => a + r.field, 0)), '']);
-  doc.autoTable({ startY: y, margin: { left: L, right: L }, head: [['#', 'ISOMETRIC', 'SPOOL', 'SHOP JOINTS', 'FIELD JOINTS', 'STATUS']], body,
-    styles: { fontSize: 8.6, cellPadding: 1.8, overflow: 'linebreak', lineColor: [227, 225, 236], lineWidth: 0.1 }, headStyles: { fillColor: [28, 11, 91], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 34, fontStyle: 'bold' }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 24, halign: 'center' }, 4: { cellWidth: 22, halign: 'center' } },
+  const body = R.map((r, k) => [String(k + 1), r.sp.iso, spLbl(r.sp.spool), r.desc, dnObs(r)]);
+  body.push(['', 'TOTAL', String(R.length), `${R.length} spool(s) in this truck`, '']);
+  doc.autoTable({ startY: y, margin: { left: L, right: L }, head: [['#', 'ISOMETRIC', 'SPOOL', 'DESCRIPTION', 'OBSERVATION']], body,
+    styles: { fontSize: 8.8, cellPadding: 1.9, overflow: 'linebreak', lineColor: [227, 225, 236], lineWidth: 0.1 }, headStyles: { fillColor: [28, 11, 91], textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 34, fontStyle: 'bold' }, 2: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }, 3: { cellWidth: 42 } },
     didParseCell: d => { if (d.section !== 'body') return; if (d.row.index === body.length - 1) { d.cell.styles.fillColor = [236, 234, 246]; d.cell.styles.fontStyle = 'bold'; }
-      else if (R[d.row.index] && R[d.row.index].left.length && (d.column.index === 3 || d.column.index === 5)) { d.cell.styles.textColor = [194, 78, 0]; d.cell.styles.fontStyle = 'bold'; } },
+      else if (R[d.row.index] && R[d.row.index].left.length && d.column.index === 4) { d.cell.styles.textColor = [194, 78, 0]; d.cell.styles.fontStyle = 'bold'; } },
     didDrawPage: () => {} });
   y = doc.lastAutoTable.finalY + 4;
-  if (R.some(r => r.left.length)) { doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(110, 106, 140); doc.text('! = shop joints still to weld (shipped incomplete). They stay pending and are done on site.', L, y + 2); y += 6; doc.setTextColor(0); }
   /* signatures */
   const H = doc.internal.pageSize.getHeight(), sh = 42, sw = (Rm - L - 8) / 2;
   let sy = Math.max(y + 6, 0); if (sy + sh > H - 16) { doc.addPage('letter', 'portrait'); sy = head('SPOOL DELIVERY NOTE') + 8; }
@@ -3562,72 +3578,45 @@ function dnPdf(p, dn, ctx) {
     if (sig && at) { doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(110, 106, 140); doc.text(`${fmtDate(dnDay(at))} ${dnHM(at)}`, x + sw - 4, sy + sh - 4.5, { align: 'right' }); }
     doc.setTextColor(0);
   });
-  /* ---------- one page per isometric ---------- */
+  /* ---------- one page per isometric: the drawing, the section of this note shaded, the shop joints to weld on site ---------- */
   const isoL = Array.from(new Set(R.map(r => r.sp.iso))).sort(cmpStr);
-  isoL.forEach(iso => {
+  for (const iso of isoL) {
     doc.addPage('letter', 'landscape');
-    const all = p.items.filter(i => i.kind === 'SPOOL' && i.iso === iso).length, mine = R.filter(r => r.sp.iso === iso);
+    const mine = R.filter(r => r.sp.iso === iso), rest = mine.some(r => r.section);
     let ty = head(`SPOOL DELIVERY NOTE · ${iso}`) + 5;
     const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(28, 11, 91);
-    doc.text(`In this note: ${mine.map(r => spLbl(r.sp.spool)).join(', ')}  of ${all} spool(s)`, 10, ty); doc.setTextColor(0);
+    doc.text(`In this note: ${mine.map(r => spLbl(r.sp.spool)).join(', ')}${rest ? '  (section · the rest of this ISO is not in this note)' : ''}`, 10, ty); doc.setTextColor(0);
     ty += 4;
     const sideW = 78, bx = 10, by = ty, bw = PW - 20 - sideW - 6, bh = PH - ty - 14;
-    const d = ctx.dwx(iso);
-    /* joints of the weld list: worst state over the spools of this note */
-    const J = p.items.filter(i => i.kind === 'JOINT' && i.iso === iso && mine.some(r => r.sp.spool === i.spool));
-    const st = name => { const L2 = J.filter(i => i.joint === name); if (!L2.length) return ''; if (L2[0].loc === 'FIELD') return 'FIELD'; return L2.some(i => !(ctx.getM(i) || {}).WEL) ? 'MISS' : 'OK'; };
+    const d = ctx.dwx(iso), bands = d && ctx.bands ? ctx.bands(iso, mine.map(r => r.sp.spool)) : [];
+    const pend = mine.flatMap(r => r.left.map(i => i.joint));
     doc.setDrawColor(200, 198, 214); doc.setLineWidth(0.3); doc.roundedRect(bx, by, bw, bh, 2.5, 2.5, 'S');
     if (d && d.img) {
       const k = Math.min((bw - 4) / d.w, (bh - 4) / d.h), iw = d.w * k, ih = d.h * k, ix = bx + (bw - iw) / 2, iy = by + (bh - ih) / 2;
-      try { doc.addImage(d.img, dnImgFmt(d.img), ix, iy, iw, ih); } catch (e) { /* drawing could not be drawn */ }
-      /* the highlighted sections of this note, in the color of their day */
-      (ctx.bands ? ctx.bands(iso, mine.map(r => r.sp.spool)) : []).forEach(b => {
-        try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.45 })); } catch (e) { /* no transparency */ }
-        doc.setDrawColor('#8E5CD9'); doc.setLineWidth(Math.max(1.2, iw / 70)); doc.setLineCap('round'); doc.setLineJoin('round');
-        for (let i = 1; i < b.pts.length; i++) doc.line(ix + b.pts[i - 1][0] * iw, iy + b.pts[i - 1][1] * ih, ix + b.pts[i][0] * iw, iy + b.pts[i][1] * ih);
-        try { doc.restoreGraphicsState(); } catch (e) { /* nothing */ }
-      });
-      doc.setLineCap('butt');
-      const r0 = Math.max(1.6, d.w / 80 * (d.bs || 1) * k);
-      Object.entries(d.mk || {}).forEach(([j, xy]) => {
-        const s = st(j); if (!s) return;
-        const cx = ix + xy[0] * iw, cy = iy + xy[1] * ih;
-        if (s === 'OK') { doc.setFillColor(46, 157, 91); doc.setDrawColor(28, 11, 91); doc.setLineWidth(0.25); doc.circle(cx, cy, r0, 'FD'); doc.setTextColor(255); }
-        else if (s === 'MISS') { doc.setFillColor(255, 255, 255); doc.setDrawColor(214, 31, 140); doc.setLineWidth(0.7); doc.circle(cx, cy, r0, 'FD'); doc.setTextColor(214, 31, 140); }
-        else { doc.setFillColor(255, 255, 255); doc.setDrawColor(28, 11, 91); doc.setLineWidth(0.3); doc.setLineDashPattern([0.6, 0.5], 0); doc.circle(cx, cy, r0, 'FD'); doc.setLineDashPattern([], 0); doc.setTextColor(28, 11, 91); }
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(Math.max(4, Math.min(8, r0 * 2.2 * (j.length > 3 ? 0.55 : 0.8)))); doc.text(j, cx, cy + r0 * 0.35, { align: 'center' });
-        if (s === 'MISS') { doc.setFontSize(Math.max(4, r0 * 1.6)); doc.text('!', cx + r0 * 1.25, cy - r0 * 0.6); }
-        doc.setTextColor(0);
-      });
+      const im = await dnCompose(d, bands);
+      try { doc.addImage(im.url, im.fmt, ix, iy, iw, ih); } catch (e) { /* drawing could not be drawn */ }
+      /* only the shop joints still to weld are marked: to find them on site */
+      const r0 = Math.max(1.8, d.w / 80 * (d.bs || 1) * k);
+      pend.forEach(j => { const xy = (d.mk || {})[j]; if (!xy) return; const cx = ix + xy[0] * iw, cy = iy + xy[1] * ih;
+        doc.setFillColor(255, 255, 255); doc.setDrawColor(214, 31, 140); doc.setLineWidth(0.7); doc.circle(cx, cy, r0, 'FD');
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(214, 31, 140); doc.setFontSize(Math.max(4, Math.min(8, r0 * 2.2 * (j.length > 3 ? 0.55 : 0.8)))); doc.text(j, cx, cy + r0 * 0.35, { align: 'center' });
+        doc.setFontSize(Math.max(4, r0 * 1.6)); doc.text('!', cx + r0 * 1.25, cy - r0 * 0.6); doc.setTextColor(0); });
     } else {
       doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(110, 106, 140);
-      doc.text('No drawing for this isometric: joints of the spools in this note:', bx + 4, by + 7); doc.setTextColor(0);
-      const names = Array.from(new Set(J.map(i => i.joint)));
-      doc.autoTable({ startY: by + 10, margin: { left: bx + 4 }, tableWidth: bw - 8, head: [['JOINT', 'ND', 'TYPE', 'LOC', 'STATE']],
-        body: names.map(n => { const i = J.find(x => x.joint === n), s = st(n); return [n, i.nd ? i.nd + '"' : '', i.type || '', i.loc === 'FIELD' ? 'Field' : 'Shop', s === 'OK' ? 'Welded' : s === 'MISS' ? 'PENDING (!)' : 'On site']; }),
-        styles: { fontSize: 8, cellPadding: 1.3 }, headStyles: { fillColor: [28, 11, 91] } });
+      doc.text('No drawing for this isometric.', bx + 4, by + 7); doc.setTextColor(0);
     }
-    /* right column: the spools of this ISO + legend */
+    /* right column: the spools of this ISO in the note + legend */
     const sx = PW - 10 - sideW;
-    doc.autoTable({ startY: by, margin: { left: sx, right: 10 }, tableWidth: sideW, head: [['SPOOL', 'SHOP', 'STATUS']],
-      body: mine.map(r => [spLbl(r.sp.spool), `${r.shopW}/${r.shop}${r.left.length ? ' !' : ''}`, r.left.length ? `${r.left.map(i => i.joint).join(', ')} pending` : 'Complete']),
-      styles: { fontSize: 8.2, cellPadding: 1.5, overflow: 'linebreak' }, headStyles: { fillColor: [28, 11, 91] }, columnStyles: { 0: { cellWidth: 16, fontStyle: 'bold' }, 1: { cellWidth: 16 } },
-      didParseCell: c => { if (c.section === 'body' && mine[c.row.index] && mine[c.row.index].left.length && c.column.index > 0) c.cell.styles.textColor = [194, 78, 0]; } });
+    doc.autoTable({ startY: by, margin: { left: sx, right: 10 }, tableWidth: sideW, head: [['SPOOL', 'OBSERVATION']],
+      body: mine.map(r => [spLbl(r.sp.spool), dnObs(r)]),
+      styles: { fontSize: 8.2, cellPadding: 1.5, overflow: 'linebreak' }, headStyles: { fillColor: [28, 11, 91] }, columnStyles: { 0: { cellWidth: 16, fontStyle: 'bold' } },
+      didParseCell: c => { if (c.section === 'body' && mine[c.row.index] && mine[c.row.index].left.length && c.column.index === 1) c.cell.styles.textColor = [194, 78, 0]; } });
     let ly = doc.lastAutoTable.finalY + 6;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(28, 11, 91); doc.text('BUBBLES', sx, ly); ly += 5;
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(40);
-    if (ctx.bands && d && ctx.bands(iso, mine.map(r => r.sp.spool)).length) { doc.setDrawColor('#8E5CD9'); doc.setLineWidth(2.4); doc.setLineCap('round'); doc.line(sx + 0.6, ly - 1.2, sx + 4, ly - 1.2); doc.setLineCap('butt'); doc.text('Section in this note', sx + 6, ly); ly += 5.2; }
-    [['OK', 'Welded in shop'], ['MISS', 'Shop joint pending (!) in a spool of this note'], ['FIELD', 'Field joint (to do on site)']].forEach(([k, t]) => {
-      if (k === 'OK') { doc.setFillColor(46, 157, 91); doc.setDrawColor(28, 11, 91); doc.setLineWidth(0.25); doc.circle(sx + 2, ly - 1.2, 1.6, 'FD'); }
-      else if (k === 'MISS') { doc.setFillColor(255, 255, 255); doc.setDrawColor(214, 31, 140); doc.setLineWidth(0.6); doc.circle(sx + 2, ly - 1.2, 1.6, 'FD'); }
-      else { doc.setFillColor(255, 255, 255); doc.setDrawColor(28, 11, 91); doc.setLineWidth(0.3); doc.setLineDashPattern([0.6, 0.5], 0); doc.circle(sx + 2, ly - 1.2, 1.6, 'FD'); doc.setLineDashPattern([], 0); }
-      const tl = doc.splitTextToSize(t, sideW - 7); doc.text(tl, sx + 6, ly); ly += 4.2 * tl.length + 1;
-    });
-    const why = mine.filter(r => r.why).map(r => `${spLbl(r.sp.spool)}: ${r.why}`);
-    if (why.length) { ly += 2; doc.setFont('helvetica', 'bold'); doc.setTextColor(194, 78, 0); doc.text('Reason (shipped incomplete)', sx, ly); ly += 4.2; doc.setFont('helvetica', 'normal');
-      why.forEach(w => { const tl = doc.splitTextToSize(w, sideW); doc.text(tl, sx, ly); ly += 4.2 * tl.length; }); doc.setTextColor(0); }
-  });
+    if (bands.length || pend.length) { doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(28, 11, 91); doc.text('LEGEND', sx, ly); ly += 5; doc.setFont('helvetica', 'normal'); doc.setTextColor(40); }
+    if (bands.length) { doc.setFillColor(220, 206, 244); doc.roundedRect(sx, ly - 2.6, 4.4, 2.8, 1.2, 1.2, 'F'); doc.text('Section in this note', sx + 6, ly); ly += 5.2; }
+    if (pend.length) { doc.setFillColor(255, 255, 255); doc.setDrawColor(214, 31, 140); doc.setLineWidth(0.6); doc.circle(sx + 2, ly - 1.2, 1.6, 'FD'); doc.text('Shop joint to weld on site', sx + 6, ly); ly += 5.2; }
+  }
   /* footer of every page with its own size (portrait first page, landscape drawings) */
   const n = doc.internal.getNumberOfPages();
   for (let i = 1; i <= n; i++) {
