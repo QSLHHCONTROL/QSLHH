@@ -577,6 +577,8 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgchk{display:flex;gap:8px;align-items:flex-start;font-size:14px;margin:6px 0 2px;line-height:1.35}.pgchk input{width:20px;height:20px;flex:none;margin-top:1px}
 
 .pgsecb{background:#FFF4EC;border-color:#FF6A00;color:#C24E00}
+
+.pgver{font-size:12px;font-weight:800;color:#6B6790;margin-top:4px}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -995,7 +997,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.9.1';
+const APP_VERSION = '2.9.3';
 /* spool name for people: 01 -> SP01 · a piece of an ISO (P1, 01-P2) keeps its name */
 const spLbl = s => !s ? '' : String(s).replace(/(^|-)REST$/, '$1Rest').replace(/^(\d+)$/, 'SP$1').replace(/^(\d+-)/, 'SP$1');
 /* highlighter of a section of an ISO: the finger line becomes straight runs in the directions of the drawing (every 15°: 0°, 30°, 90°…) */
@@ -2232,7 +2234,7 @@ function pgRender(root) {
   if (!p) {      /* choose the project */
     const tot = pgPending();
     root.innerHTML = `<div class="app pgapp">${pgTop()}${typeof PG_STANDALONE !== 'undefined' ? '' : `<div class="pgh"><button class="btn sm" data-a="pgback">${icon('undo')} Man-hours</button></div>`}
-      <div class="pgmain"><div class="pgpick-h"><h2>Choose project <button class="pgkey" data-a="pgsettings" aria-label="Codes and settings">🔑</button></h2><div>${P0.length} open project(s)${PG.S.lists ? ` · lists of ${fmtDate(String(PG.S.lists.at).slice(0, 10))}` : ''}${tot ? ` · <b class="pgns">${tot} mark(s) not sent</b>` : ''}</div></div>
+      <div class="pgmain"><div class="pgpick-h"><h2>Choose project <button class="pgkey" data-a="pgsettings" aria-label="Codes and settings">🔑</button></h2><div>${P0.length} open project(s)${PG.S.lists ? ` · lists of ${fmtDate(String(PG.S.lists.at).slice(0, 10))}` : ''}${tot ? ` · <b class="pgns">${tot} mark(s) not sent</b>` : ''}</div><div class="pgver">App version ${APP_VERSION}</div></div>
       <div class="pgpick">${P0.map(x => { if (x.locked) return `<button class="pgcard pglocked" data-pglock="${esc(x.id)}"><span class="k">${pgKind(x)}</span><span class="r1"><b class="n">🔒 ${esc(x.name)}</b></span><span class="s">Locked · tap and write the project code</span></button>`;
         const h = pgHeadline(x), u = pgUnsent(x);
         return `<button class="pgcard" data-pgp="${esc(x.id)}"><span class="k">${pgKind(x)}</span>
@@ -2529,7 +2531,7 @@ async function pgClick(e) {
   if (d.pgt) { PG.ui.tab = d.pgt; PG.ui.sel = new Set(); PG.ui.stf = 'ALL'; PG.ui.spool = 'ALL'; render(); return; }
   if (d.pgjm) { PG.ui.jm = d.pgjm; PG.ui.sel = new Set(); render(); return; }
   if (d.pgr) { if (PG.ui.sel.has(d.pgr)) PG.ui.sel.delete(d.pgr); else PG.ui.sel.add(d.pgr); pgRefresh(); return; }
-  if (d.pgm) { if (d.pgm !== 'hl' && PG.ui.hl && PG.ui.hl.length) { PG.ui.hl = []; PG.ui.sel = new Set(); pgRefresh(); } PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = (pgIsoMode(p) ? PG_MODE_ISO : PG_MODE)[d.pgm] || ''; return; }
+  if (d.pgm) { if (d.pgm !== 'hl' && !PG.ui.q && PG.ui.hl && PG.ui.hl.length) { PG.ui.hl = []; PG.ui.sel = new Set(); pgRefresh(); } PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = (pgIsoMode(p) ? PG_MODE_ISO : PG_MODE)[d.pgm] || ''; return; }
   if (d.pgmark && (pgIsoMode(p) || PG.ui.act === 'JNT')) { pgIsoMark(p, d.pgmark); return; }
   if (d.pgmark) {
     const date = PG.ui.date || todayStr();
@@ -2550,12 +2552,15 @@ async function pgClick(e) {
     case 'pgdnnew': pgDnNew(p); break;
     case 'pgnonote': PG.ui.nonote = !PG.ui.nonote; PG.ui.sel = new Set(); render(); break;
     case 'pgdnlist': pgDnList(p); break;
-    case 'pghome': PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.sel = new Set(); PG.ui.nonote = false; render(); break;
+    case 'pghome': PG.ui.q = null; PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.sel = new Set(); PG.ui.nonote = false; render(); break;
     case 'pghlundo': pgHlUndo(p); break;
-    case 'pgsec': { const sp = pgSelItems(p)[0]; if (!sp) break; PG.ui.act = 'ISO'; PG.ui.isoV = sp.iso; PG.ui.mode = 'hl'; PG.ui.hl = []; PG.ui.sel = new Set(); render(); UI.toast('Pass your finger over the pipe that leaves.', 'ok'); break; }
+    case 'pgsec': pgTruckStart(p); break;
+    case 'pgtrksec': pgTruckStep(p, 'sec'); break;
+    case 'pgtrkwhole': pgTruckStep(p, 'whole'); break;
+    case 'pgtrkstop': pgTruckEnd(p); break;
     case 'pghlship': pgShipSection(p); break;
     case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
-    case 'pgisos': PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
+    case 'pgisos': if (PG.ui.q) { pgTruckEnd(p); break; } PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
     case 'pgzsave': pgZoneSave(p); break;
     case 'pghydsave': pgHydSave(p); break;
     case 'pgsettings': pgSettings(); break;
@@ -2754,7 +2759,7 @@ function pgCodeModal(stub) {
 /* name, master code, lock again */
 function pgSettings() {
   const open = pgAll().filter(p => p.lock && PG.S.dec[p.id]);
-  const m = UI.modal(`<h3>${icon('gear')} Settings</h3>
+  const m = UI.modal(`<h3>${icon('gear')} Settings <span class="pgver" style="display:inline;margin-left:6px">v${APP_VERSION}</span></h3>
     ${typeof askName === 'function' ? `<div class="pgset"><div><b>Your name</b><span>${esc(S.sup || '-')}</span></div><button class="btn sm" data-s="name">Change</button></div>` : ''}
     <div class="pgset"><div><b>🔑 Master code (office)</b><span>${PG.S.master ? 'Written on this phone · it opens every project' : 'Only for the office: opens every project'}</span></div><button class="btn sm" data-s="master">${PG.S.master ? 'Change' : 'Write'}</button></div>
     <div class="mlabel">PROJECTS OPEN ON THIS PHONE</div>
@@ -2952,6 +2957,7 @@ function pgHlSel(p) {
 }
 function pgHlUndo(p) { (PG.ui.hl || []).pop(); pgHlSel(p); pgIsoRedraw(p); pgRefresh(); }
 function pgHlBar(p) {
+  if (PG.ui.q) return pgTruckBar(p);
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean), it = g => g.items[0];
   const free = G.filter(g => pgFreeJoint(p, it(g))), taken = G.filter(g => !pgFreeJoint(p, it(g)));
   const shop = free.filter(g => g.loc === 'SHOP'), left = shop.filter(g => !pgM(p, it(g)).WEL);
@@ -2960,6 +2966,14 @@ function pgHlBar(p) {
     <div class="pgcrow"><div class="pgsum"><b>🖍 ${free.length} joint(s) under the line</b><span>${free.length ? free.map(g => esc(g.joint)).join(' · ') : 'Pass closer to the pipe.'}${left.length ? ` · <b class="pgwarn2">⚠ ${left.length} shop to weld</b>` : ''}${taken.length ? ` · ${taken.length} already in a piece` : ''}</span></div>
       <button class="btn ghost pgx" data-a="pgclear" aria-label="Clear">✕</button></div>
     <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase line</button><button class="btn" data-a="pghlship" ${free.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">🚚 Ship this section</button></div></div>`;
+}
+function pgTruckBar(p) {
+  const q = PG.ui.q, last = q.i + 1 === q.list.length;
+  const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean).filter(g => pgFreeJoint(p, g.items[0]));
+  return `<div class="pgsheet pgc on" id="pgbar">
+    <div class="pgcrow"><div class="pgsum"><b>🚚 ${esc(q.list[q.i].iso)} · ${q.i + 1} of ${q.list.length}</b><span>${G.length ? `${G.length} joint(s) under the line: ${G.map(g => esc(g.joint)).join(' · ')}` : 'Pass your finger over the pipe that leaves.'}</span></div>
+      <button class="btn ghost pgx" data-a="pgtrkstop" aria-label="Stop">✕</button></div>
+    <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase</button><button class="btn ghost" data-a="pgtrkwhole">Whole ISO</button><button class="btn" data-a="pgtrksec" ${G.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">${last ? (q.list.length > 1 ? 'Ship all ✓' : 'Ship ✓') : 'Next →'}</button></div></div>`;
 }
 /* the section becomes a piece (P1, P2…) of the ISO and leaves today; the rest of the ISO stays in shop */
 /* what is in no piece is "the rest of the ISO" (shop joints, and the field joints that join it); the whole-spool item goes away */
@@ -3019,6 +3033,57 @@ async function pgShipSection(p) {
   UI.toast(`${name} shipped · ${G.length} joint(s).`, 'ok');
   if (r.dn) pgDnForm(p, [id]);
 }
+/* ---------- one truck, several ISOs: the sections are highlighted drawing after drawing, and one delivery note goes at the end ---------- */
+const pgAskWhy = (title, txt) => new Promise(res => {
+  const m = UI.modal(`<h3>⚠ ${title}</h3><p class="msub" style="color:#C24E00"><b>${txt}</b> It leaves incomplete; write why.</p><input class="inp" id="qwWhy" placeholder="e.g. urgent erection" style="font-size:16px">
+    <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="ok">Ship</button></div>`, { locked: true });
+  m.addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (!b) return; if (b.dataset.x === 'no') { UI.close(); res(null); return; }
+    const v = m.querySelector('#qwWhy').value.trim(); if (!v) { UI.toast('Write the reason.', 'err'); return; } UI.close(); res(v); });
+});
+function pgTruckStart(p) {
+  const L = pgSelItems(p).filter(s => pgSplittable(p, s)).sort((a, b) => cmpStr(a.iso, b.iso));
+  if (!L.length) return;
+  PG.ui.q = { list: L.map(s => ({ iso: s.iso, id: s.id })), i: 0, done: [] };
+  pgTruckOpen(p);
+}
+function pgTruckOpen(p) {
+  const q = PG.ui.q, cur = q.list[q.i];
+  PG.ui.act = 'ISO'; PG.ui.isoV = cur.iso; PG.ui.mode = 'hl'; PG.ui.hl = []; PG.ui.sel = new Set(); render();
+  UI.toast(`${cur.iso} · ${q.i + 1} of ${q.list.length}: pass your finger over the pipe that leaves.`, 'ok');
+}
+async function pgTruckStep(p, how) {
+  const q = PG.ui.q; if (!q) return;
+  const cur = q.list[q.i], date = PG.ui.date || todayStr();
+  if (!S.sup && typeof askName === 'function' && !await askName(false)) return;
+  if (how === 'sec') {
+    const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean).filter(g => pgFreeJoint(p, g.items[0]));
+    if (!G.length) { UI.toast('Pass your finger over the pipe first, or tap Whole.', 'err'); return; }
+    const left = G.filter(g => g.loc === 'SHOP' && !pgM(p, g.items[0]).WEL);
+    const why = left.length ? await pgAskWhy(`${cur.iso} · section`, `${left.length} shop joint(s) still to weld: ${left.map(g => esc(g.joint)).join(', ')}.`) : '';
+    if (why === null) return;
+    const used = new Set(p.items.filter(i => i.kind === 'SPOOL' && i.iso === cur.iso).map(i => i.spool)); let k = 1; while (used.has('P' + k)) k++; const name = 'P' + k;
+    const z = { uid: uid(), pid: p.id, iso: cur.iso, name, joints: G.map(g => g.joint), lines: PG.ui.hl || [], date, by: S.sup || '', at: new Date().toISOString(), sent: false };
+    PG.S.pz.push(z); pgPzApply(p, z);
+    const id = `S|${cur.iso}|${name}`;
+    PG.S.marks.push(Object.assign({ uid: uid(), batch: uid(), at: new Date().toISOString(), pid: p.id, item: id, stage: 'SHIP', act: 'SET', date, by: S.sup || '', crew: '', sent: false }, left.length ? { force: true, note: why } : {}));
+    q.done.push(id);
+  } else if (how === 'whole') {
+    const sp = p.items.find(i => i.kind === 'SPOOL' && i.iso === cur.iso && /^(\d+|REST)$/.test(i.spool)); if (!sp) { UI.toast('Nothing left of this ISO.', 'err'); return; }
+    const inf = pgSpoolInfo(p, sp);
+    const why = inf.status === 'In shop' ? await pgAskWhy(`${cur.iso} · whole`, `${inf.left.length} shop joint(s) still to weld: ${inf.left.map(j => esc(j.joint)).join(', ')}.`) : '';
+    if (why === null) return;
+    PG.S.marks.push(Object.assign({ uid: uid(), batch: uid(), at: new Date().toISOString(), pid: p.id, item: sp.id, stage: 'SHIP', act: 'SET', date, by: S.sup || '', crew: '', sent: false }, why ? { force: true, note: why } : {}));
+    q.done.push(sp.id);
+  }
+  PG.cache = null; await pgSave();
+  if (q.i + 1 < q.list.length) { q.i++; pgTruckOpen(p); return; }
+  pgTruckEnd(p);
+}
+function pgTruckEnd(p) {
+  const done = PG.ui.q ? PG.ui.q.done : []; PG.ui.q = null;
+  PG.ui.act = 'SPOOLS'; PG.ui.isoV = ''; PG.ui.mode = 'tap'; PG.ui.hl = []; PG.ui.sel = new Set(); PG.ui.stf = 'Shipped'; render();
+  if (done.length) pgDnAsk(p, done);
+}
 /* an ISO made of pieces (P1, P2…): each joint is in one piece; the color says the day its piece was shipped */
 const PG_PZCOL = ['#F2C200', '#E0479E', '#4FC3F7', '#8E5CD9', '#FF6A00', '#2E9D5B'];
 function pgPzInfo(p, iso) {
@@ -3038,7 +3103,7 @@ function pgIsoList(p) {        /* no drawing: the joint list alone */
 const PG_FWD = [['FIT', 'Fit-up ✓'], ['WEL', 'Weld ✓'], ['PNT', 'Painted ✓'], ['TRQ', 'Torque ✓'], ['REP', 'Repair']];
 const PG_BK = [['B_PNT', '← No paint'], ['B_FIT', '← Fit-up'], ['B_PEN', '← Pending']];
 function pgIsoBar(p) {
-  if (PG.ui.mode === 'hl' && pgIsoMode(p)) return pgHlBar(p);
+  if ((PG.ui.mode === 'hl' || PG.ui.q) && pgIsoMode(p)) return pgHlBar(p);
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean), one = G.length === 1 ? G[0] : null;
   const fwd = PG_FWD.filter(([s]) => s !== 'PNT' || pgPaintJ(p)).map(([s, l]) => [s, l, G.reduce((a, g) => a + pgAvail(p, g, s).length, 0)]).filter(x => x[2]);
   const bk = PG_BK.filter(([k]) => k !== 'B_PNT' || pgPaintJ(p)).map(([k, l]) => [k, l, G.reduce((a, g) => a + (g.kind === 'TORQUE' && k !== 'B_PEN' ? 0 : pgBackList(p, g, k).length), 0)]).filter(x => x[2]);
@@ -3137,12 +3202,13 @@ function pgItemBar(p) {
   const sp = items.filter(i => i.kind === 'SPOOL'), inf = new Map(sp.map(s => [s.id, pgSpoolInfo(p, s)]));
   const fwd = [], bk = [];
   const split = sp.length === 1 && items.length === 1 && pgSplittable(p, sp[0]) && ['Ready', 'In shop'].includes(inf.get(sp[0].id).status) ? sp[0] : null;
-  if (split) fwd.push(['SEC', '🖍 Only a section', 1]);
+  const many = sp.length > 1 && sp.length === items.length && sp.every(s => pgSplittable(p, s) && ['Ready', 'In shop'].includes(inf.get(s.id).status)) && new Set(sp.map(s => s.iso)).size === sp.length;
+  if (split || many) fwd.push(['SEC', many ? `🖍 Sections · ${sp.length}` : '🖍 Only a section', 1]);
   if (sp.length) {
-    fwd.push(['SHIP', split ? `Whole ${split.spool === 'REST' ? 'rest' : 'spool'} ✓` : 'Shipped ✓', sp.filter(s => inf.get(s.id).status === 'Ready').length]);
+    fwd.push(['SHIP', split ? `Whole ${split.spool === 'REST' ? 'rest' : 'spool'} ✓` : many ? 'Whole spools ✓' : 'Shipped ✓', sp.filter(s => inf.get(s.id).status === 'Ready').length]);
     fwd.push(['INST', 'Installed ✓', sp.filter(s => inf.get(s.id).status === 'Shipped' && !inf.get(s.id).field).length]);
     if (pgPaintS(p)) fwd.push(['PNT', 'Painted ✓', sp.filter(s => pgCanX(p, s, 'PNT')).length]);
-    fwd.push(['SHIPANY', split ? `⚠ Whole ${split.spool === 'REST' ? 'rest' : 'spool'} anyway` : '⚠ Ship anyway', sp.filter(s => inf.get(s.id).status === 'In shop').length]);
+    fwd.push(['SHIPANY', split ? `⚠ Whole ${split.spool === 'REST' ? 'rest' : 'spool'} anyway` : many ? '⚠ Whole spools anyway' : '⚠ Ship anyway', sp.filter(s => inf.get(s.id).status === 'In shop').length]);
     fwd.push(['DN', '📄 Delivery note', sp.filter(s => pgM(p, s).SHIP).length]);
     bk.push(['B_SHIP', '← Not shipped', sp.filter(s => pgM(p, s).SHIP).length]);
     if (pgPaintS(p)) bk.push(['B_PNT', '← No paint', sp.filter(s => pgM(p, s).PNT).length]);
