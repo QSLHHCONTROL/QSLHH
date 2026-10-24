@@ -575,6 +575,8 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgmfab.hl.on{background:#FF6A00;border-color:#FF6A00;color:#fff}
 .pgpart{display:flex;align-items:center;gap:8px;margin:2px 0 6px;font-size:12px}.pgpart b{color:#5A3C8C}.pgpart>span{display:flex;gap:3px;margin-left:auto}.pgpart i{width:18px;height:8px;border-radius:4px;display:block}
 .pgchk{display:flex;gap:8px;align-items:flex-start;font-size:14px;margin:6px 0 2px;line-height:1.35}.pgchk input{width:20px;height:20px;flex:none;margin-top:1px}
+
+.pgsecb{background:#FFF4EC;border-color:#FF6A00;color:#C24E00}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -993,7 +995,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.9.1';
 /* spool name for people: 01 -> SP01 · a piece of an ISO (P1, 01-P2) keeps its name */
 const spLbl = s => !s ? '' : String(s).replace(/(^|-)REST$/, '$1Rest').replace(/^(\d+)$/, 'SP$1').replace(/^(\d+-)/, 'SP$1');
 /* highlighter of a section of an ISO: the finger line becomes straight runs in the directions of the drawing (every 15°: 0°, 30°, 90°…) */
@@ -2118,6 +2120,10 @@ async function pgUndo() {
   const b = un[un.length - 1].batch, n = PG.S.marks.filter(m => m.batch === b).length;
   if (!await UI.confirm('Undo', `Undo the last action (${n} mark(s))?`, 'Undo')) return;
   PG.S.marks = PG.S.marks.filter(m => m.batch !== b);
+  /* a section shipped from the drawing and undone before sending: it is no longer a piece */
+  const p = pgCur();
+  (PG.S.pz || []).filter(z => !z.sent && !PG.S.marks.some(m => m.item === `S|${z.iso}|${z.name}` && m.stage === 'SHIP' && m.act === 'SET')).forEach(z => { const pp = pgProj(z.pid); if (pp && !pp.locked) pgPzRevert(pp, z); });
+  if (p) PG.cache = null;
   await pgSave(); render();
 }
 
@@ -2546,6 +2552,7 @@ async function pgClick(e) {
     case 'pgdnlist': pgDnList(p); break;
     case 'pghome': PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.sel = new Set(); PG.ui.nonote = false; render(); break;
     case 'pghlundo': pgHlUndo(p); break;
+    case 'pgsec': { const sp = pgSelItems(p)[0]; if (!sp) break; PG.ui.act = 'ISO'; PG.ui.isoV = sp.iso; PG.ui.mode = 'hl'; PG.ui.hl = []; PG.ui.sel = new Set(); render(); UI.toast('Pass your finger over the pipe that leaves.', 'ok'); break; }
     case 'pghlship': pgShipSection(p); break;
     case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
     case 'pgisos': PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
@@ -2922,7 +2929,9 @@ function pgPartial(p, iso) {
 }
 /* ---------- ship a section: the one who dispatches passes the finger over the pipe that leaves ---------- */
 const PG_HL = '#FF6A00';
-const pgPieceShipOk = p => { const SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === PG.ui.isoV); return SP.length > 0 && SP.every(s => cpOf(s) === '01') && pgOn(p, 'SHIP') !== false; };
+const pgPieceShipOk = (p, iso) => { const SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === (iso || PG.ui.isoV)); return SP.length > 0 && SP.every(s => cpOf(s) === '01') && p.items.some(i => i.kind === 'JOINT' && i.iso === (iso || PG.ui.isoV) && pgFreeJoint(p, i)); };
+/* a whole spool (or the rest of an ISO) that can still be split: EA 1 and a drawing with its joints */
+const pgSplittable = (p, sp) => sp && sp.kind === 'SPOOL' && /^(\d+|REST)$/.test(sp.spool) && pgPieceShipOk(p, sp.iso) && !!((p.dwx || {})['ISO:' + sp.iso]);
 function pgBands(p, iso) {
   const L = (p.pzl || {})[iso] || {}, SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === iso);
   const days = Array.from(new Set(SP.map(s => (pgM(p, s).SHIP || {}).date).filter(Boolean))).sort();
@@ -2953,17 +2962,37 @@ function pgHlBar(p) {
     <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase line</button><button class="btn" data-a="pghlship" ${free.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">🚚 Ship this section</button></div></div>`;
 }
 /* the section becomes a piece (P1, P2…) of the ISO and leaves today; the rest of the ISO stays in shop */
+/* what is in no piece is "the rest of the ISO" (shop joints, and the field joints that join it); the whole-spool item goes away */
+function pgPzNorm(p, iso) {
+  const L = p.items.filter(i => i.iso === iso && (i.kind === 'JOINT' || i.kind === 'TORQUE') && pgFreeJoint(p, i));
+  const rest = L.some(i => i.kind === 'JOINT' && i.loc === 'SHOP');
+  L.forEach(i => { i.spool = i.kind === 'JOINT' && (i.loc === 'SHOP' || rest) ? 'REST' : ''; });
+  p.items = p.items.filter(i => !(i.kind === 'SPOOL' && i.iso === iso && /^\d+$/.test(i.spool)));
+  const r = p.items.find(i => i.id === `S|${iso}|REST`);
+  if (rest && !r) p.items.push({ id: `S|${iso}|REST`, kind: 'SPOOL', iso, spool: 'REST', cp: '01' });
+  if (!rest && r) p.items.splice(p.items.indexOf(r), 1);
+}
 function pgPzApply(p, z) {
   if (p.items.some(i => i.id === `S|${z.iso}|${z.name}`)) return;
   const set = new Set(z.joints || []);
-  p.items.filter(i => i.iso === z.iso && (i.kind === 'JOINT' || i.kind === 'TORQUE')).forEach(i => { const nm = i.kind === 'JOINT' ? i.joint : i.tag;
-    if (set.has(nm) && pgFreeJoint(p, i)) i.spool = z.name; else if (/^\d+$/.test(i.spool || '')) i.spool = i.kind === 'JOINT' && i.loc === 'SHOP' ? 'REST' : ''; });
+  p.items.filter(i => i.iso === z.iso && (i.kind === 'JOINT' || i.kind === 'TORQUE')).forEach(i => { if (set.has(i.kind === 'JOINT' ? i.joint : i.tag) && pgFreeJoint(p, i)) i.spool = z.name; });
   p.items.push({ id: `S|${z.iso}|${z.name}`, kind: 'SPOOL', iso: z.iso, spool: z.name, cp: '01' });
-  const restN = p.items.some(i => i.iso === z.iso && i.spool === 'REST'), base = p.items.find(i => i.kind === 'SPOOL' && i.iso === z.iso && /^\d+$/.test(i.spool));
-  if (base) { if (restN && !p.items.some(i => i.id === `S|${z.iso}|REST`)) { base.id = `S|${z.iso}|REST`; base.spool = 'REST'; } else p.items.splice(p.items.indexOf(base), 1); }
-  else if (restN && !p.items.some(i => i.id === `S|${z.iso}|REST`)) p.items.push({ id: `S|${z.iso}|REST`, kind: 'SPOOL', iso: z.iso, spool: 'REST', cp: '01' });
-  if (!restN) { const r = p.items.find(i => i.id === `S|${z.iso}|REST`); if (r) p.items.splice(p.items.indexOf(r), 1); }
+  pgPzNorm(p, z.iso);
   if ((z.lines || []).length) { if (!p.pzl) p.pzl = {}; if (!p.pzl[z.iso]) p.pzl[z.iso] = {}; p.pzl[z.iso][z.name] = z.lines; }
+}
+/* undo a section that was not sent yet: its joints go back to the rest; with no pieces left the ISO is one spool again */
+function pgPzRevert(p, z) {
+  const id = `S|${z.iso}|${z.name}`;
+  p.items.filter(i => i.iso === z.iso && i.spool === z.name && i.kind !== 'SPOOL').forEach(i => { i.spool = 'REST'; });
+  p.items = p.items.filter(i => i.id !== id);
+  if (p.pzl && p.pzl[z.iso]) delete p.pzl[z.iso][z.name];
+  const pieces = p.items.some(i => i.kind === 'SPOOL' && i.iso === z.iso && i.spool !== 'REST');
+  if (pieces) pgPzNorm(p, z.iso);
+  else { p.items.filter(i => i.iso === z.iso && (i.kind === 'JOINT' || i.kind === 'TORQUE')).forEach(i => { i.spool = '01'; });
+    const r = p.items.find(i => i.id === `S|${z.iso}|REST`); if (r) { r.id = `S|${z.iso}|01`; r.spool = '01'; } else p.items.push({ id: `S|${z.iso}|01`, kind: 'SPOOL', iso: z.iso, spool: '01', cp: '01' }); }
+  PG.S.pz = (PG.S.pz || []).filter(x => x.uid !== z.uid);
+  (PG.S.dn || []).filter(d => !d.sent && (d.spools || []).includes(id)).forEach(d => { d.spools = d.spools.filter(x => x !== id); });
+  PG.S.dn = (PG.S.dn || []).filter(d => d.sent || (d.spools || []).length);
 }
 function pgPzAll(p) { (PG.S && PG.S.pz || []).filter(z => z.pid === p.id).forEach(z => pgPzApply(p, z)); }
 async function pgShipSection(p) {
@@ -3107,11 +3136,13 @@ function pgItemBar(p) {
   const items = pgSelItems(p);
   const sp = items.filter(i => i.kind === 'SPOOL'), inf = new Map(sp.map(s => [s.id, pgSpoolInfo(p, s)]));
   const fwd = [], bk = [];
+  const split = sp.length === 1 && items.length === 1 && pgSplittable(p, sp[0]) && ['Ready', 'In shop'].includes(inf.get(sp[0].id).status) ? sp[0] : null;
+  if (split) fwd.push(['SEC', '🖍 Only a section', 1]);
   if (sp.length) {
-    fwd.push(['SHIP', 'Shipped ✓', sp.filter(s => inf.get(s.id).status === 'Ready').length]);
+    fwd.push(['SHIP', split ? `Whole ${split.spool === 'REST' ? 'rest' : 'spool'} ✓` : 'Shipped ✓', sp.filter(s => inf.get(s.id).status === 'Ready').length]);
     fwd.push(['INST', 'Installed ✓', sp.filter(s => inf.get(s.id).status === 'Shipped' && !inf.get(s.id).field).length]);
     if (pgPaintS(p)) fwd.push(['PNT', 'Painted ✓', sp.filter(s => pgCanX(p, s, 'PNT')).length]);
-    fwd.push(['SHIPANY', '⚠ Ship anyway', sp.filter(s => inf.get(s.id).status === 'In shop').length]);
+    fwd.push(['SHIPANY', split ? `⚠ Whole ${split.spool === 'REST' ? 'rest' : 'spool'} anyway` : '⚠ Ship anyway', sp.filter(s => inf.get(s.id).status === 'In shop').length]);
     fwd.push(['DN', '📄 Delivery note', sp.filter(s => pgM(p, s).SHIP).length]);
     bk.push(['B_SHIP', '← Not shipped', sp.filter(s => pgM(p, s).SHIP).length]);
     if (pgPaintS(p)) bk.push(['B_PNT', '← No paint', sp.filter(s => pgM(p, s).PNT).length]);
@@ -3122,7 +3153,7 @@ function pgItemBar(p) {
   const auto = sp.some(s => inf.get(s.id).status === 'Shipped' && inf.get(s.id).field) ? 'Installed goes by itself when its field joints are welded.' : sp.some(s => inf.get(s.id).status === 'In shop') ? 'Ready goes by itself when its shop joints are welded.' : '';
   return `<div class="pgsheet pgc ${items.length ? 'on' : ''}" id="pgbar">
     <div class="pgcrow"><div class="pgsum"><b>${items.length === 1 ? esc(sp.length ? `${items[0].iso} · ${spLbl(items[0].spool)}` : items[0].tag) : `${items.length} selected`}</b><span>${sp.length === 1 ? inf.get(sp[0].id).status : ''}</span></div>
-      ${F.map(([s, l, n]) => s === 'SHIPANY' ? `<button class="btn pgany" data-a="pgshipany">${l}${items.length > 1 ? ` · ${n}` : ''}</button>` : s === 'DN' ? `<button class="btn pgdnb" data-a="pgdnnew">${l}</button>` : `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` · ${n}` : ''}</button>`).join('')}
+      ${F.map(([s, l, n]) => s === 'SEC' ? `<button class="btn pgsecb" data-a="pgsec">${l}</button>` : s === 'SHIPANY' ? `<button class="btn pgany" data-a="pgshipany">${l}${items.length > 1 ? ` · ${n}` : ''}</button>` : s === 'DN' ? `<button class="btn pgdnb" data-a="pgdnnew">${l}</button>` : `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` · ${n}` : ''}</button>`).join('')}
       <button class="btn ghost pgx" data-a="pgclear" aria-label="Clear">✕</button></div>
     ${B.length || auto ? `<div class="pgcrow2">${B.map(([k, l]) => `<button class="pglink" data-pgb="${k}">${l}</button>`).join('')}${auto ? `<span>${auto}</span>` : ''}</div>` : ''}</div>`;
 }
@@ -3473,8 +3504,8 @@ function dnPdf(p, dn, ctx) {
       try { doc.addImage(d.img, dnImgFmt(d.img), ix, iy, iw, ih); } catch (e) { /* drawing could not be drawn */ }
       /* the highlighted sections of this note, in the color of their day */
       (ctx.bands ? ctx.bands(iso, mine.map(r => r.sp.spool)) : []).forEach(b => {
-        try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: b.op })); } catch (e) { /* no transparency */ }
-        doc.setDrawColor(b.col); doc.setLineWidth(Math.max(1.2, iw / 70)); doc.setLineCap('round'); doc.setLineJoin('round');
+        try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: 0.45 })); } catch (e) { /* no transparency */ }
+        doc.setDrawColor('#8E5CD9'); doc.setLineWidth(Math.max(1.2, iw / 70)); doc.setLineCap('round'); doc.setLineJoin('round');
         for (let i = 1; i < b.pts.length; i++) doc.line(ix + b.pts[i - 1][0] * iw, iy + b.pts[i - 1][1] * ih, ix + b.pts[i][0] * iw, iy + b.pts[i][1] * ih);
         try { doc.restoreGraphicsState(); } catch (e) { /* nothing */ }
       });
@@ -3507,6 +3538,7 @@ function dnPdf(p, dn, ctx) {
     let ly = doc.lastAutoTable.finalY + 6;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(28, 11, 91); doc.text('BUBBLES', sx, ly); ly += 5;
     doc.setFont('helvetica', 'normal'); doc.setTextColor(40);
+    if (ctx.bands && d && ctx.bands(iso, mine.map(r => r.sp.spool)).length) { doc.setDrawColor('#8E5CD9'); doc.setLineWidth(2.4); doc.setLineCap('round'); doc.line(sx + 0.6, ly - 1.2, sx + 4, ly - 1.2); doc.setLineCap('butt'); doc.text('Section in this note', sx + 6, ly); ly += 5.2; }
     [['OK', 'Welded in shop'], ['MISS', 'Shop joint pending (!) in a spool of this note'], ['FIELD', 'Field joint (to do on site)']].forEach(([k, t]) => {
       if (k === 'OK') { doc.setFillColor(46, 157, 91); doc.setDrawColor(28, 11, 91); doc.setLineWidth(0.25); doc.circle(sx + 2, ly - 1.2, 1.6, 'FD'); }
       else if (k === 'MISS') { doc.setFillColor(255, 255, 255); doc.setDrawColor(214, 31, 140); doc.setLineWidth(0.6); doc.circle(sx + 2, ly - 1.2, 1.6, 'FD'); }
