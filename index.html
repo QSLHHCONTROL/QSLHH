@@ -997,7 +997,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.9.5';
+const APP_VERSION = '3.0.0';
 /* spool name for people: 01 -> SP01 · a piece of an ISO (P1, 01-P2) keeps its name */
 const spLbl = s => !s ? '' : String(s).replace(/(^|-)REST$/, '$1Rest').replace(/^(\d+)$/, 'SP$1').replace(/^(\d+-)/, 'SP$1');
 /* highlighter of a section of an ISO: the finger line becomes straight runs in the directions of the drawing (every 15°: 0°, 30°, 90°…) */
@@ -2019,7 +2019,13 @@ async function pgLoad() {
   if (!PG.S.days) PG.S.days = [];      /* day log: fitters, welders, hours */
   if (!PG.S.rolls) PG.S.rolls = [];    /* dome rolls received / returned */
   if (!PG.S.dl) PG.S.dl = {};          /* day log on/off set on this phone (by project) */
-  ['zev', 'hyd', 'opened', 'dn', 'pz'].forEach(k => { if (!PG.S[k]) PG.S[k] = []; });   /* pz: sections of an ISO shipped from the field (pieces) */   /* supports by zone, hydro tests, projects opened */
+  ['zev', 'hyd', 'opened', 'dn', 'shp', 'shpx'].forEach(k => { if (!PG.S[k]) PG.S[k] = []; });   /* shp: shipments (complete or by parts) · shpx: shipments taken back */
+  if (PG.S.pz) {          /* the old "pieces" (P1, Rest…) are gone: what was not sent of them is dropped */
+    const old = id => /^S\|[^|]+\|(?!\d+$)/.test(id);
+    PG.S.marks = PG.S.marks.filter(m => m.sent || !old(m.item));
+    PG.S.dn = PG.S.dn.filter(d => d.sent || !(d.spools || []).some(old));
+    delete PG.S.pz;
+  }   /* supports by zone, hydro tests, projects opened */
   if (!PG.S.dec) PG.S.dec = {};        /* locked projects opened on this phone */
   if (!PG.S.codes) PG.S.codes = {};
 }
@@ -2028,11 +2034,11 @@ async function pgSave() { PG.cache = null; const ok = await Store.set('progress'
 const pgAll = () => (PG.S && PG.S.lists ? PG.S.lists.projects : []) || [];
 const pgProjects = () => pgAll().map(p => p.lock ? (PG.S.dec[p.id] || { id: p.id, type: p.type, name: p.name, locked: true, items: [], marks: {} }) : p);
 const pgProj = id => pgProjects().find(p => p.id === id);
-const pgCur = () => { const p = pgProj(PG.ui.pid); if (p && !p.locked && typeof pgPzAll === 'function') pgPzAll(p); return p && !p.locked ? p : null; };
+const pgCur = () => { const p = pgProj(PG.ui.pid); return p && !p.locked ? p : null; };
 const pgRep = p => p.type === 'REPAIR';
 const pgDome = p => p.type === 'DOME';
 const pgIsMap = p => pgRep(p) || pgDome(p);
-const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length + ['days', 'rolls', 'zev', 'hyd', 'dn', 'pz'].reduce((a, k) => a + (PG.S[k] || []).filter(d => !d.sent).length, 0) : 0;
+const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length + ['days', 'rolls', 'zev', 'hyd', 'dn', 'shp', 'shpx'].reduce((a, k) => a + (PG.S[k] || []).filter(d => !d.sent).length, 0) : 0;
 /* day log on: what this phone chose, or what the office set in the lists */
 const pgDlOn = p => { const o = PG.S.dl && PG.S.dl[p.id]; if (o && typeof o === 'object') return o.base === !!p.dl ? !!o.on : !!p.dl; return o === undefined ? !!p.dl : !!o; };
 const pgDay = (p, d) => (PG.S.days || []).filter(x => x.pid === p.id && x.date === d).sort((a, b) => String(a.at).localeCompare(String(b.at))).pop();
@@ -2069,12 +2075,12 @@ const pgNext = (p, it) => pgStages(it)[pgDone(p, it) + 1] || '';
 const pgStatus = (p, it) => { const k = pgDone(p, it); return k < 0 ? '' : pgStages(it)[k]; };
 const pgColor = (p, it) => { const s = pgStatus(p, it); return s ? PG_STG[s].color : PG_PEND; };
 const pgSpoolOf = (p, it) => it.spool ? p.items.find(x => x.id === `S|${it.iso}|${it.spool}`) : null;
-const pgInShop = (p, it) => { if (it.kind !== 'JOINT' || it.loc !== 'FIELD' || !it.spool) return false; const sp = pgSpoolOf(p, it); return !!sp && !pgM(p, sp).SHIP; };
+const pgInShop = (p, it) => { if (it.kind !== 'JOINT' || it.loc !== 'FIELD' || !it.spool) return false; const sp = pgSpoolOf(p, it); return !!sp && !pgM(p, sp).SHIP && !pgShips(p, sp).length; };
 function pgSpoolInfo(p, sp) {
   const J = p.items.filter(i => i.kind === 'JOINT' && i.iso === sp.iso && i.spool === sp.spool);
   const shop = J.filter(i => i.loc === 'SHOP'), sw = shop.filter(i => pgM(p, i).WEL), fd = J.filter(i => i.loc === 'FIELD');
   const ready = shop.length === sw.length, m = pgM(p, sp);
-  return { shop: shop.length, shopW: sw.length, field: fd.length, fieldW: fd.filter(i => pgM(p, i).WEL).length, ready, force: !!(m.SHIP && !ready), left: shop.filter(i => !pgM(p, i).WEL), status: m.INST ? 'Installed' : m.SHIP ? 'Shipped' : ready ? 'Ready' : 'In shop' };
+  return { shop: shop.length, shopW: sw.length, field: fd.length, fieldW: fd.filter(i => pgM(p, i).WEL).length, ready, force: !!(m.SHIP && !ready), left: shop.filter(i => !pgM(p, i).WEL), status: m.INST ? 'Installed' : m.SHIP ? 'Shipped' : pgShips(p, sp).length ? 'Partial' : ready ? 'Ready' : 'In shop' };
 }
 const pgName = it => it.kind === 'JOINT' || it.kind === 'THREAD' ? `${it.spool ? spLbl(it.spool) + ' · ' : ''}${it.joint}` : it.kind === 'TORQUE' ? `${it.spool ? spLbl(it.spool) + ' · ' : ''}${it.tag}` : it.kind === 'SPOOL' ? `Spool ${it.spool}` : it.kind === 'OTHER' ? it.tag : it.id;
 const pgQty = (p, it) => pgRep(p) ? (it.ft || 0) : (it.kind === 'JOINT' || it.kind === 'THREAD') ? (it.nd || 0) : 1;
@@ -2117,11 +2123,14 @@ function pgBack(p, ids, keep) {
 }
 /* undo my last action (only while it has not been sent) */
 async function pgUndo() {
-  const un = PG.S.marks.filter(m => !m.sent);
+  const un = PG.S.marks.filter(m => !m.sent).concat((PG.S.shp || []).filter(s => !s.sent)).sort((a, c) => String(a.at).localeCompare(String(c.at)));
   if (!un.length) { UI.toast('Nothing to undo (what was sent stays; use Back to…).', 'err'); return; }
-  const b = un[un.length - 1].batch, n = PG.S.marks.filter(m => m.batch === b).length;
-  if (!await UI.confirm('Undo', `Undo the last action (${n} mark(s))?`, 'Undo')) return;
-  PG.S.marks = PG.S.marks.filter(m => m.batch !== b);
+  const b = un[un.length - 1].batch, n = PG.S.marks.filter(m => m.batch === b).length + (PG.S.shp || []).filter(s => s.batch === b).length;
+  if (!await UI.confirm('Undo', `Undo the last action (${n} change(s))?`, 'Undo')) return;
+  const gone = new Set((PG.S.shp || []).filter(s => s.batch === b).map(s => s.uid));
+  PG.S.marks = PG.S.marks.filter(m => m.batch !== b); PG.S.shp = (PG.S.shp || []).filter(s => s.batch !== b);
+  (PG.S.dn || []).filter(d => !d.sent).forEach(d => { d.shp = (d.shp || []).filter(u => !gone.has(u)); });      /* a note not sent yet loses what was undone */
+  PG.S.dn = (PG.S.dn || []).filter(d => d.sent || !Array.isArray(d.shp) || d.shp.length);
   /* a section shipped from the drawing and undone before sending: it is no longer a piece */
   const p = pgCur();
   (PG.S.pz || []).filter(z => !z.sent && !PG.S.marks.some(m => m.item === `S|${z.iso}|${z.name}` && m.stage === 'SHIP' && m.act === 'SET')).forEach(z => { const pp = pgProj(z.pid); if (pp && !pp.locked) pgPzRevert(pp, z); });
@@ -2157,11 +2166,11 @@ function pgSendSummary(nHH) {
     const un = PG.S.marks.filter(m => !m.sent);
     const rows = pgProjects().map(p => { const mk = un.filter(m => m.pid === p.id);
       const dy = (PG.S.days || []).filter(d => !d.sent && d.pid === p.id), rl = (PG.S.rolls || []).filter(r => !r.sent && r.pid === p.id);
-      const zv = (PG.S.zev || []).filter(d => !d.sent && d.pid === p.id), hy = (PG.S.hyd || []).filter(d => !d.sent && d.pid === p.id), dn = (PG.S.dn || []).filter(d => !d.sent && d.pid === p.id), pz = (PG.S.pz || []).filter(d => !d.sent && d.pid === p.id);
+      const zv = (PG.S.zev || []).filter(d => !d.sent && d.pid === p.id), hy = (PG.S.hyd || []).filter(d => !d.sent && d.pid === p.id), dn = (PG.S.dn || []).filter(d => !d.sent && d.pid === p.id), pz = (PG.S.shp || []).filter(d => !d.sent && d.pid === p.id);
       if (!mk.length && !dy.length && !rl.length && !zv.length && !hy.length && !dn.length && !pz.length) return '';
       const c = {}; mk.forEach(m => { const k = m.act === 'CLR' ? 'Back to pending' : pgLabel(p, m.stage); c[k] = (c[k] || 0) + 1; });
       if (dy.length) c['Day log'] = dy.length; if (rl.length) c['Rolls'] = rl.length;
-      if (zv.length) c['Supports'] = zv.reduce((a, e) => a + (Number(e.n) || 0), 0); if (hy.length) c['Hydro tests'] = hy.length; if (dn.length) c['Delivery notes'] = dn.length; if (pz.length) c['Sections'] = pz.length;
+      if (zv.length) c['Supports'] = zv.reduce((a, e) => a + (Number(e.n) || 0), 0); if (hy.length) c['Hydro tests'] = hy.length; if (dn.length) c['Delivery notes'] = dn.length; if (pz.length) c['Shipments'] = pz.length;
       return `<div class="pgsm"><div><b>${pgDome(p) ? 'Dome' : pgRep(p) ? 'Tank' : 'Piping'} · ${esc(p.name)}</b><span>${Object.keys(c).map(esc).join(' · ')}</span></div><b>${Object.values(c).join(' · ')}</b></div>`; }).join('');
     const tot = pgPending() + (nHH || 0);
     const m = UI.modal(`<h3>${icon('send')} Send to Admin</h3><p class="msub">What you send · ${fmtDate(todayStr())}</p>
@@ -2175,9 +2184,9 @@ function pgPayload() {
   const strip = x => { const y = Object.assign({}, x); delete y.sent; delete y.batch; return y; };
   return { type: 'QSL_PROGRESS_DAY', v: 3, sup: S.sup || '', dev: S.dev, at: new Date().toISOString(), marks: PG.S.marks.filter(m => !m.sent).map(strip),
     days: (PG.S.days || []).filter(d => !d.sent).map(strip), rolls: (PG.S.rolls || []).filter(r => !r.sent).map(strip),
-    zev: (PG.S.zev || []).filter(d => !d.sent).map(strip), hyd: (PG.S.hyd || []).filter(d => !d.sent).map(strip), dn: (PG.S.dn || []).filter(d => !d.sent).map(strip), pz: (PG.S.pz || []).filter(d => !d.sent).map(strip), opened: (PG.S.opened || []).filter(d => !d.sent).map(strip) };
+    zev: (PG.S.zev || []).filter(d => !d.sent).map(strip), hyd: (PG.S.hyd || []).filter(d => !d.sent).map(strip), dn: (PG.S.dn || []).filter(d => !d.sent).map(strip), shp: (PG.S.shp || []).filter(d => !d.sent).map(strip), shpx: (PG.S.shpx || []).filter(d => !d.sent).map(strip), opened: (PG.S.opened || []).filter(d => !d.sent).map(strip) };
 }
-async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); ['days', 'rolls', 'zev', 'hyd', 'opened', 'dn', 'pz'].forEach(k => (PG.S[k] || []).forEach(d => { d.sent = true; })); await pgSave(); }
+async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); ['days', 'rolls', 'zev', 'hyd', 'opened', 'dn', 'shp', 'shpx'].forEach(k => (PG.S[k] || []).forEach(d => { d.sent = true; })); await pgSave(); }
 async function pgSendOnly() {
   const n = pgPending();
   if (!n) { UI.toast('No progress to send.', 'ok'); return; }
@@ -2556,8 +2565,8 @@ async function pgClick(e) {
     case 'pghome': PG.ui.q = null; PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.sel = new Set(); PG.ui.nonote = false; render(); break;
     case 'pghlundo': pgHlUndo(p); break;
     case 'pgsec': pgTruckStart(p); break;
-    case 'pgtrksec': pgTruckStep(p, 'sec'); break;
-    case 'pgtrkwhole': pgTruckStep(p, 'whole'); break;
+    case 'pgall2': pgShipComplete(p); break;
+    case 'pgtrksec': pgTruckStep(p); break;
     case 'pgtrkstop': pgTruckEnd(p); break;
     case 'pghlship': pgShipSection(p); break;
     case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
@@ -2766,6 +2775,7 @@ function pgSettings() {
     <div class="mlabel">PROJECTS OPEN ON THIS PHONE</div>
     ${open.map(p => `<div class="pgset"><div><b>🔓 ${esc(p.name)}</b><span>${PG.S.codes[p.id] ? 'project code' : 'master code'}</span></div><button class="btn sm ghost" data-lock="${p.id}">Lock again</button></div>`).join('') || '<p class="msub">None (open projects without code are always visible).</p>'}
     <p class="msub">Use "Lock again" before you lend the phone.</p>
+    ${pgPending() ? `<div class="pgset"><div><b>🗑 Discard what was not sent</b><span>${pgPending()} change(s) on this phone not sent to the Admin</span></div><button class="btn sm red" data-s="discard">Discard</button></div>` : ''}
     <div class="mbtns"><button class="btn primary" data-x="ok">Close</button></div>`);
   m.addEventListener('click', async e => {
     const b = e.target.closest('[data-s],[data-lock],[data-x]'); if (!b) return;
@@ -2773,6 +2783,10 @@ function pgSettings() {
     if (b.dataset.lock) { delete PG.S.dec[b.dataset.lock]; delete PG.S.codes[b.dataset.lock]; if (PG.S.master) { const mm = PG.S.master; PG.S.master = ''; await pgSave(); UI.toast('Locked. (The master code was removed from this phone too.)', 'ok'); void mm; } else { await pgSave(); UI.toast('Locked again.', 'ok'); }
       if (PG.ui.pid === b.dataset.lock) PG.ui.pid = ''; UI.close(); render(); return; }
     if (b.dataset.s === 'name') { UI.close(); askName(false); return; }
+    if (b.dataset.s === 'discard') { UI.close();
+      if (!await UI.confirm('Discard', `Delete the ${pgPending()} change(s) not sent (marks, shipments, delivery notes, day log…)? What was already sent stays.`, 'Discard', true)) return;
+      PG.S.marks = PG.S.marks.filter(m => m.sent); ['days', 'rolls', 'zev', 'hyd', 'dn', 'shp', 'shpx'].forEach(k => { PG.S[k] = (PG.S[k] || []).filter(d => d.sent); });
+      PG.cache = null; PG.ui.sel = new Set(); await pgSave(); render(); UI.toast('Changes not sent were discarded.', 'ok'); return; }
     if (b.dataset.s === 'master') {
       UI.close();
       const mm = UI.modal(`<h3>🔑 Master code</h3><p class="msub">Only for the office. It opens every locked project on this phone.</p><input class="inp pgcode" id="mcIn" maxlength="12" autocapitalize="characters" autocomplete="off" placeholder="••••••">
@@ -2874,7 +2888,8 @@ function pgIsoBubs(p) {
   const wedge = (a0, a1, col) => { if (a1 - a0 <= 0.0001) return ''; if (a1 - a0 >= 0.9999) return `<circle r="${R}" fill="${col}"/>`;
     const p0 = [R * Math.sin(2 * Math.PI * a0), -R * Math.cos(2 * Math.PI * a0)], p1 = [R * Math.sin(2 * Math.PI * a1), -R * Math.cos(2 * Math.PI * a1)];
     return `<path d="M0,0 L${p0[0]},${p0[1]} A${R},${R} 0 ${a1 - a0 > 0.5 ? 1 : 0} 1 ${p1[0]},${p1[1]} Z" fill="${col}"/>`; };
-  const out = (PG.ui.q ? PG.ui.hl || [] : []).map(L => ({ pts: L, col: PG_HL, op: 0.55 })).map(b => `<polyline points="${b.pts.map(q => `${q[0] * d.w},${q[1] * d.h}`).join(' ')}" fill="none" stroke="${b.col}" stroke-opacity="${b.op}" stroke-width="${d.w / 70}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" style="mix-blend-mode:multiply"/>`), PZ = pgPzInfo(p, PG.ui.isoV), lined = new Set(Object.keys((p.pzl || {})[PG.ui.isoV] || {}));
+  const cur = PG.ui.q && PG.ui.q.list[PG.ui.q.i], pc = cur ? pgShipCol(p, cur.iso) : null;
+  const out = (cur ? pgShipsAll(p).filter(x => x.sp === cur.id).flatMap(x => (x.lines || []).map(L => ({ pts: L, col: pc(x), op: 0.4 }))) : []).concat((PG.ui.q ? PG.ui.hl || [] : []).map(L => ({ pts: L, col: PG_HL, op: 0.55 }))).map(b => `<polyline points="${b.pts.map(q => `${q[0] * d.w},${q[1] * d.h}`).join(' ')}" fill="none" stroke="${b.col}" stroke-opacity="${b.op}" stroke-width="${d.w / 70}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" style="mix-blend-mode:multiply"/>`), PZ = pgPzInfo(p, PG.ui.isoV), lined = new Set(Object.keys((p.pzl || {})[PG.ui.isoV] || {}));
   Object.entries(d.mk || {}).forEach(([j, xy]) => {
     const g = byJ.get(j); if (!g) return;
     const x = xy[0] * d.w, y = xy[1] * d.h, sel = PG.ui.sel.has(g.key);
@@ -2920,6 +2935,7 @@ function pgDispView(p) {
         <div class="pgfabs l">${[['hl', 'Mark'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${k === 'hl' ? 'hl ' : ''}${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${k === 'hl' ? '<b style="font-size:20px;line-height:1">🖍</b>' : PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
         <div class="pgmode" id="pgmode">${PG_MODE_ISO[PG.ui.mode] || ''}</div>
         <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button></div>
+        ${(() => { const L = pgShipsAll(p).filter(x => x.sp === cur.id && (x.lines || []).length), c = pgShipCol(p, cur.iso); return L.length ? `<div class="pgpzleg">${L.map(x => `<span><i style="background:${c(x)}"></i>Left ${esc(fmtDate(x.date).slice(0, 6))}${pgDnOfShip(p, x.uid) ? ' · ' + esc(pgDnOfShip(p, x.uid).no.split('-').pop()) : ''}</span>`).join('')}<span><i style="background:${PG_HL}"></i>Now</span></div>` : ''; })()}
         ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The drawing is bigger sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}</div>
     </div>${pgTruckBar(p)}</div>`;
 }
@@ -2963,13 +2979,13 @@ function pgHlAdd(p, path) {
   const d = pgDwx(p); if (!d) return;
   const L = pzStraight(path, d.w); if (L.length < 2) { pgRefresh(); return; }
   const nl = L.map(c => [Math.min(1, Math.max(0, c[0] / d.w)), Math.min(1, Math.max(0, c[1] / d.h))]);
-  PG.ui.hl = (PG.ui.hl || []).concat([nl]); pgHlSel(p); pgIsoRedraw(p); pgRefresh();
+  PG.ui.hl = (PG.ui.hl || []).concat([nl]); pgIsoRedraw(p); pgRefresh();
 }
 function pgHlSel(p) {
   const d = pgDwx(p), G = new Map(pgIsoJoints(p, PG.ui.isoV).map(g => [g.joint, g]));
   PG.ui.sel = new Set(pzNear(PG.ui.hl || [], d.mk, d.w, d.h, d.w / 80 * (d.bs || 1) * 1.8).map(j => G.get(j)).filter(Boolean).map(g => g.key));
 }
-function pgHlUndo(p) { (PG.ui.hl || []).pop(); pgHlSel(p); pgIsoRedraw(p); pgRefresh(); }
+function pgHlUndo(p) { (PG.ui.hl || []).pop(); pgIsoRedraw(p); pgRefresh(); }
 function pgHlBar(p) {
   if (PG.ui.q) return pgTruckBar(p);
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean), it = g => g.items[0];
@@ -2982,12 +2998,10 @@ function pgHlBar(p) {
     <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase line</button><button class="btn" data-a="pghlship" ${free.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">🚚 Ship this section</button></div></div>`;
 }
 function pgTruckBar(p) {
-  const q = PG.ui.q, last = q.i + 1 === q.list.length;
-  const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean).filter(g => pgFreeJoint(p, g.items[0]));
+  const q = PG.ui.q, last = q.i + 1 === q.list.length, n = (PG.ui.hl || []).length;
   return `<div class="pgsheet pgc on" id="pgbar">
-    <div class="pgcrow"><div class="pgsum"><b>🚚 ${esc(q.list[q.i].iso)} · ${q.i + 1} of ${q.list.length}</b><span>${G.length ? `Joints: ${G.map(g => esc(g.joint)).join(' · ')}${(() => { const sh = G.filter(g => g.loc === 'SHOP'), w = sh.filter(g => pgM(p, g.items[0]).WEL).length; return sh.length ? ` · shop welded ${w}/${sh.length}` : ''; })()}` : 'Pass your finger over the pipe that leaves.'}</span></div>
-</div>
-    <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase</button><button class="btn ghost" data-a="pgtrkwhole">Whole ISO</button><button class="btn" data-a="pgtrksec" ${G.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">${last ? (q.list.length > 1 ? 'Ship all ✓' : 'Ship ✓') : 'Next →'}</button></div></div>`;
+    <div class="pgcrow"><div class="pgsum"><b>🚚 ${esc(q.list[q.i].iso)}${q.list.length > 1 ? ` · ${q.i + 1} of ${q.list.length}` : ''}</b><span>${n ? `${n} line(s) marked · what leaves now` : 'Pass your finger over what leaves (pipe, or a loose item in the material list).'}</span></div></div>
+    <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo" ${n ? '' : 'disabled'}>↶ Erase</button><button class="btn" data-a="pgtrksec" ${n ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">${last ? 'Finish ✓' : 'Next →'}</button></div></div>`;
 }
 /* the section becomes a piece (P1, P2…) of the ISO and leaves today; the rest of the ISO stays in shop */
 /* what is in no piece is "the rest of the ISO" (shop joints, and the field joints that join it); the whole-spool item goes away */
@@ -3054,8 +3068,17 @@ const pgAskWhy = (title, txt) => new Promise(res => {
   m.addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (!b) return; if (b.dataset.x === 'no') { UI.close(); res(null); return; }
     const v = m.querySelector('#qwWhy').value.trim(); if (!v) { UI.toast('Write the reason.', 'err'); return; } UI.close(); res(v); });
 });
+/* ===== shipments: an ISO leaves complete, or by parts drawn on its drawing (the drawing is only a picture: the joints do not change) ===== */
+const pgShpX = p => new Set((PG.S.shpx || []).filter(x => x.pid === p.id).map(x => x.shp));
+function pgShipsAll(p) { const x = pgShpX(p), m = new Map(); (p.shp || []).concat((PG.S.shp || []).filter(s => s.pid === p.id)).forEach(s => { if (!x.has(s.uid)) m.set(s.uid, s); }); return Array.from(m.values()).sort((a, b) => cmpStr(a.date + (a.at || ''), b.date + (b.at || ''))); }
+const pgShips = (p, sp) => pgShipsAll(p).filter(s => s.sp === sp.id);
+const pgDnOfShip = (p, u) => pgDnActive(p).find(d => (d.shp || []).includes(u)) || null;
+function pgShipCol(p, iso) {
+  const L = pgShipsAll(p).filter(s => s.iso === iso), keys = Array.from(new Set(L.map(s => s.date + '|' + ((pgDnOfShip(p, s.uid) || {}).no || ''))));
+  return s => PZ_DAY[keys.indexOf(s.date + '|' + ((pgDnOfShip(p, s.uid) || {}).no || '')) % PZ_DAY.length];
+}
 function pgTruckStart(p) {
-  const L = pgSelItems(p).filter(s => pgSplittable(p, s)).sort((a, b) => cmpStr(a.iso, b.iso));
+  const L = pgSelItems(p).filter(s => s.kind === 'SPOOL' && (p.dwx || {})['ISO:' + s.iso]).sort((a, b) => cmpStr(a.iso, b.iso));
   if (!L.length) return;
   PG.ui.q = { list: L.map(s => ({ iso: s.iso, id: s.id })), i: 0, done: [] };
   pgTruckOpen(p);
@@ -3063,40 +3086,38 @@ function pgTruckStart(p) {
 function pgTruckOpen(p) {
   const q = PG.ui.q, cur = q.list[q.i];
   PG.ui.act = 'ISO'; PG.ui.isoV = cur.iso; PG.ui.mode = 'hl'; PG.ui.hl = []; PG.ui.sel = new Set(); render();
-  UI.toast(`${cur.iso} · ${q.i + 1} of ${q.list.length}: pass your finger over the pipe that leaves.`, 'ok');
 }
-async function pgTruckStep(p, how) {
+async function pgTruckStep(p) {
   const q = PG.ui.q; if (!q) return;
-  const cur = q.list[q.i], date = PG.ui.date || todayStr();
+  if (!(PG.ui.hl || []).length) { UI.toast('Mark on the drawing what leaves.', 'err'); return; }
   if (!S.sup && typeof askName === 'function' && !await askName(false)) return;
-  if (how === 'sec') {
-    const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean).filter(g => pgFreeJoint(p, g.items[0]));
-    if (!G.length) { UI.toast('Pass your finger over the pipe first, or tap Whole.', 'err'); return; }
-    const left = G.filter(g => g.loc === 'SHOP' && !pgM(p, g.items[0]).WEL);
-    const why = left.length ? await pgAskWhy(`${cur.iso} · section`, `${left.length} shop joint(s) still to weld: ${left.map(g => esc(g.joint)).join(', ')}.`) : '';
-    if (why === null) return;
-    const used = new Set(p.items.filter(i => i.kind === 'SPOOL' && i.iso === cur.iso).map(i => i.spool)); let k = 1; while (used.has('P' + k)) k++; const name = 'P' + k;
-    const z = { uid: uid(), pid: p.id, iso: cur.iso, name, joints: G.map(g => g.joint), lines: PG.ui.hl || [], date, by: S.sup || '', at: new Date().toISOString(), sent: false };
-    PG.S.pz.push(z); pgPzApply(p, z);
-    const id = `S|${cur.iso}|${name}`;
-    PG.S.marks.push(Object.assign({ uid: uid(), batch: uid(), at: new Date().toISOString(), pid: p.id, item: id, stage: 'SHIP', act: 'SET', date, by: S.sup || '', crew: '', sent: false }, left.length ? { force: true, note: why } : {}));
-    q.done.push(id);
-  } else if (how === 'whole') {
-    const sp = p.items.find(i => i.kind === 'SPOOL' && i.iso === cur.iso && /^(\d+|REST)$/.test(i.spool)); if (!sp) { UI.toast('Nothing left of this ISO.', 'err'); return; }
-    const inf = pgSpoolInfo(p, sp);
-    const why = inf.status === 'In shop' ? await pgAskWhy(`${cur.iso} · whole`, `${inf.left.length} shop joint(s) still to weld: ${inf.left.map(j => esc(j.joint)).join(', ')}.`) : '';
-    if (why === null) return;
-    PG.S.marks.push(Object.assign({ uid: uid(), batch: uid(), at: new Date().toISOString(), pid: p.id, item: sp.id, stage: 'SHIP', act: 'SET', date, by: S.sup || '', crew: '', sent: false }, why ? { force: true, note: why } : {}));
-    q.done.push(sp.id);
-  }
-  PG.cache = null; await pgSave();
+  const cur = q.list[q.i];
+  if (!q.batch) q.batch = uid();
+  const s = { uid: uid(), batch: q.batch, pid: p.id, iso: cur.iso, sp: cur.id, kind: 'PART', lines: PG.ui.hl, date: PG.ui.date || todayStr(), by: S.sup || '', at: new Date().toISOString(), sent: false };
+  PG.S.shp.push(s); q.done.push(s.uid); PG.cache = null; await pgSave();
   if (q.i + 1 < q.list.length) { q.i++; pgTruckOpen(p); return; }
   pgTruckEnd(p);
 }
 function pgTruckEnd(p) {
   const done = PG.ui.q ? PG.ui.q.done : []; PG.ui.q = null;
-  PG.ui.act = 'SPOOLS'; PG.ui.isoV = ''; PG.ui.mode = 'tap'; PG.ui.hl = []; PG.ui.sel = new Set(); PG.ui.stf = 'Shipped'; render();
+  PG.ui.act = 'SPOOLS'; PG.ui.isoV = ''; PG.ui.mode = 'tap'; PG.ui.hl = []; PG.ui.sel = new Set(); PG.ui.stf = 'Partial'; render();
   if (done.length) pgDnAsk(p, done);
+}
+/* the whole ISO leaves (or what is left of it, after its parts) */
+async function pgShipComplete(p) {
+  const L = pgSelItems(p).filter(s => s.kind === 'SPOOL' && ['Ready', 'In shop', 'Partial'].includes(pgSpoolInfo(p, s).status));
+  if (!L.length) return;
+  if (!S.sup && typeof askName === 'function' && !await askName(false)) return;
+  const nr = L.filter(s => !pgSpoolInfo(p, s).ready);
+  const why = nr.length ? await pgAskWhy('Shop joints to weld', nr.map(s => `${esc(s.iso)}: ${pgSpoolInfo(p, s).left.map(j => esc(j.joint)).join(', ')}`).join(' · ') + '.') : '';
+  if (why === null) return;
+  const date = PG.ui.date || todayStr(), batch = uid(), at = new Date().toISOString(), done = [];
+  L.forEach(sp => { const inc = !pgSpoolInfo(p, sp).ready;
+    PG.S.marks.push(Object.assign({ uid: uid(), batch, at, pid: p.id, item: sp.id, stage: 'SHIP', act: 'SET', date, by: S.sup || '', crew: '', sent: false }, inc ? { force: true, note: why } : {}));
+    const s = { uid: uid(), batch, pid: p.id, iso: sp.iso, sp: sp.id, kind: 'ALL', lines: [], date, by: S.sup || '', at, sent: false }; PG.S.shp.push(s); done.push(s.uid); });
+  PG.cache = null; PG.ui.sel = new Set(); await pgSave(); render();
+  UI.toast(`Complete: ${L.length} ISO(s).`, 'ok');
+  pgDnAsk(p, done);
 }
 /* an ISO made of pieces (P1, P2…): each joint is in one piece; the color says the day its piece was shipped */
 const PG_PZCOL = ['#F2C200', '#E0479E', '#4FC3F7', '#8E5CD9', '#FF6A00', '#2E9D5B'];
@@ -3184,23 +3205,24 @@ async function pgIsoBack(p, kind) {
 /* ---------------- spools, torque and other items: grouped by ISO ---------------- */
 /* delivery notes of this phone: a void note does not count (its spools go back to "no note") */
 const pgDnActive = p => (PG.S.dn || []).filter(d => d.pid === p.id && !d.void);
-const pgDnOf = (p, id) => pgDnActive(p).find(d => (d.spools || []).includes(id)) || null;
+const pgDnOf = (p, id) => pgDnActive(p).find(d => (d.spools || []).includes(id)) || null;     /* old notes */
 const pgDnSeq = no => String(no || '').split('-').pop();
 function pgSpools(p) {
   const st = PG.ui.stf || 'Ready', SP = p.items.filter(i => i.kind === 'SPOOL'), info = new Map(SP.map(s => [s.id, pgSpoolInfo(p, s)]));
-  const cnt = k => SP.filter(s => k === 'ALL' || info.get(s.id).status === k).length;
-  const nn = st === 'Shipped' && !!PG.ui.nonote;
-  const rows = SP.filter(s => (st === 'ALL' || info.get(s.id).status === st || PG.ui.sel.has(s.id)) && (!nn || !pgDnOf(p, s.id) || PG.ui.sel.has(s.id))).sort((a, b) => cmpStr(a.iso, b.iso) || cmpStr(a.spool, b.spool));
-  const col = { 'In shop': ['#E3E1EC', '#1C0B5B'], Ready: [PG_STG.FIT.color, PG_STG.FIT.ink], Shipped: [PG_STG.SHIP.color, '#fff'], Installed: [PG_STG.INST.color, '#fff'] };
-  let last = '';
+  const F = { Ready: s => info.get(s.id).status === 'Ready', Shop: s => info.get(s.id).status === 'In shop', Partial: s => info.get(s.id).status === 'Partial', Shipped: s => ['Shipped', 'Installed'].includes(info.get(s.id).status), ALL: () => true };
+  const free = s => pgShips(p, s).some(x => !pgDnOfShip(p, x.uid)), nn = !!PG.ui.nonote, nFree = SP.filter(free).length;
+  const rows = SP.filter(s => ((F[st] || F.ALL)(s) && (!nn || free(s))) || PG.ui.sel.has(s.id)).sort((a, b) => cmpStr(a.iso, b.iso) || cmpStr(a.spool, b.spool));
+  const col = { 'In shop': ['#E3E1EC', '#1C0B5B'], Ready: [PG_STG.FIT.color, PG_STG.FIT.ink], Partial: ['#B39DDB', '#1C0B5B'], Shipped: [PG_STG.SHIP.color, '#fff'], Installed: [PG_STG.INST.color, '#fff'] };
+  const ea = iso => SP.filter(x => x.iso === iso).length;
   const nDn = (PG.S.dn || []).filter(d => d.pid === p.id).length;
-  const nFree = SP.filter(s => info.get(s.id).status === 'Shipped' && !pgDnOf(p, s.id)).length;
-  const selAll = (rows.length > 1 ? `<button class="pgselall" data-a="pgall">✓ Select all ${rows.length}</button>` : '')
-    + (st === 'Shipped' && nDn ? `<button class="pgnn ${nn ? 'on' : ''}" data-a="pgnonote">No note · ${nFree}${nn ? ' ✓' : ''}</button>` : '')
+  const acts = (rows.length > 1 ? `<button class="pgselall" data-a="pgall">✓ Select all ${rows.length}</button>` : '')
+    + (nFree ? `<button class="pgnn ${nn ? 'on' : ''}" data-a="pgnonote">No note · ${nFree}${nn ? ' ✓' : ''}</button>` : '')
     + (nDn ? `<button class="pgselall" data-a="pgdnlist">📄 Notes · ${nDn}</button>` : '');
-  return `<div class="pgseg">${[['Ready', 'Ready'], ['Shipped', 'Shipped'], ['Installed', 'Installed'], ['In shop', 'Shop'], ['ALL', 'All']].map(([k, l]) => `<button class="${st === k ? 'on' : ''}" data-pgst="${k}">${l} ${cnt(k)}</button>`).join('')}</div>${selAll ? `<div class="pgacts">${selAll}</div>` : ''}
-    <div class="pglist2 full">${rows.map(s => { const i = info.get(s.id), c = col[i.status], h = s.iso !== last ? `<div class="pgsec">${esc(s.iso)}</div>` : ''; last = s.iso;
-      return h + `<button class="pgjr ${PG.ui.sel.has(s.id) ? 'sel' : ''}" data-pgr="${esc(s.id)}"><span class="pgsq" style="background:${c[0]}"></span><b>${esc(spLbl(s.spool))}</b><span class="d">shop ${i.force ? `<b class="pgwarn2">${i.shopW}/${i.shop} ⚠</b>` : `${i.shopW}/${i.shop}`}${i.field ? ` · field ${i.fieldW}/${i.field}` : ''}${pgM(p, s).SHIP && i.status !== 'In shop' && i.status !== 'Ready' ? ' · shipped ' + esc(fmtDate(pgM(p, s).SHIP.date).slice(0, 6)) : ''}${pgM(p, s).PNT ? ' · painted' : ''}</span><span class="c">${pgDnOf(p, s.id) ? `<span class="pgdnt">📄 ${esc(pgDnSeq(pgDnOf(p, s.id).no))}</span>` : ''}<span class="pgst" style="background:${c[0]};color:${c[1]}">${i.status}${i.force ? ` ⚠ ${i.left.length}` : ''}</span></span></button>`; }).join('') || '<div class="hint">No spools here.</div>'}</div>`;
+  return `<div class="pgseg">${[['Ready', 'Ready'], ['Shop', 'Shop'], ['Partial', 'Partial'], ['Shipped', 'Shipped'], ['ALL', 'All']].map(([k, l]) => `<button class="${st === k ? 'on' : ''}" data-pgst="${k}">${l} ${SP.filter(F[k]).length}</button>`).join('')}</div>${acts ? `<div class="pgacts">${acts}</div>` : ''}
+    <div class="pglist2 full">${rows.map(s => { const i = info.get(s.id), c = col[i.status] || col['In shop'], L = pgShips(p, s), last = L[L.length - 1], dn = last && pgDnOfShip(p, last.uid);
+      const sub = i.status === 'In shop' ? `<b class="pgwarn2">⚠ ${i.left.length} shop joint(s) to weld</b>` : i.status === 'Ready' ? 'shop complete' : i.status === 'Partial' ? `${L.length} part(s) · ${esc(fmtDate(last.date).slice(0, 6))}${dn ? ' · ' + esc(dn.no.split('-').pop()) : ''}`
+        : `${last ? 'left ' + esc(fmtDate(last.date).slice(0, 6)) : ''}${dn ? ' · 📄 ' + esc(dn.no.split('-').pop()) : ''}${i.force ? ' · <b class="pgwarn2">⚠ weld on site</b>' : ''}`;
+      return `<button class="pgjr ${PG.ui.sel.has(s.id) ? 'sel' : ''}" data-pgr="${esc(s.id)}"><span class="pgsq" style="background:${c[0]}"></span><b>${esc(s.iso)}${ea(s.iso) > 1 ? ' · ' + esc(spLbl(s.spool)) : ''}</b><span class="d">${sub}</span><span class="c"><span class="pgst" style="background:${c[0]};color:${c[1]}">${i.status}</span></span></button>`; }).join('') || '<div class="hint">Nothing here.</div>'}</div>`;
 }
 function pgSimple(p, kind) {
   const st = kind === 'TORQUE' ? 'TRQ' : 'INS', all = PG.ui.f === 'all', L = p.items.filter(i => i.kind === kind);
@@ -3215,36 +3237,40 @@ function pgItemBar(p) {
   const items = pgSelItems(p);
   const sp = items.filter(i => i.kind === 'SPOOL'), inf = new Map(sp.map(s => [s.id, pgSpoolInfo(p, s)]));
   const fwd = [], bk = [];
-  const split = sp.length === 1 && items.length === 1 && pgSplittable(p, sp[0]) && ['Ready', 'In shop'].includes(inf.get(sp[0].id).status) ? sp[0] : null;
-  const many = sp.length > 1 && sp.length === items.length && sp.every(s => pgSplittable(p, s) && ['Ready', 'In shop'].includes(inf.get(s.id).status)) && new Set(sp.map(s => s.iso)).size === sp.length;
-  if (split || many) fwd.push(['SEC', many ? `🖍 Sections · ${sp.length}` : '🖍 Only a section', 1]);
   if (sp.length) {
-    fwd.push(['SHIP', split ? `Whole ${split.spool === 'REST' ? 'rest' : 'spool'} ✓` : many ? 'Whole spools ✓' : 'Shipped ✓', sp.filter(s => inf.get(s.id).status === 'Ready').length]);
+    const open = sp.filter(s => ['Ready', 'In shop', 'Partial'].includes(inf.get(s.id).status));
+    if (open.length === sp.length && sp.every(s => (p.dwx || {})['ISO:' + s.iso])) fwd.push(['PARTS', '🖍 By parts', 1]);
+    if (open.length === sp.length) fwd.push(['ALLS', 'Complete ✓', 1]);
     fwd.push(['INST', 'Installed ✓', sp.filter(s => inf.get(s.id).status === 'Shipped' && !inf.get(s.id).field).length]);
     if (pgPaintS(p)) fwd.push(['PNT', 'Painted ✓', sp.filter(s => pgCanX(p, s, 'PNT')).length]);
-    fwd.push(['SHIPANY', split ? `⚠ Whole ${split.spool === 'REST' ? 'rest' : 'spool'} anyway` : many ? '⚠ Whole spools anyway' : '⚠ Ship anyway', sp.filter(s => inf.get(s.id).status === 'In shop').length]);
-    fwd.push(['DN', '📄 Delivery note', sp.filter(s => pgM(p, s).SHIP).length]);
-    bk.push(['B_SHIP', '← Not shipped', sp.filter(s => pgM(p, s).SHIP).length]);
+    if (sp.some(s => pgShips(p, s).some(x => !pgDnOfShip(p, x.uid)))) fwd.push(['DN', '📄 Delivery note', 1]);
+    bk.push(['B_SHIP', '← Not complete', sp.filter(s => pgM(p, s).SHIP).length]);
     if (pgPaintS(p)) bk.push(['B_PNT', '← No paint', sp.filter(s => pgM(p, s).PNT).length]);
   }
   ['TORQUE', 'OTHER'].forEach(k => { const L = items.filter(i => i.kind === k), s = k === 'TORQUE' ? 'TRQ' : 'INS';
     if (L.length) { fwd.push([s, k === 'TORQUE' ? 'Torque ✓' : 'Installed ✓', L.filter(i => pgNext(p, i) === s).length]); bk.push(['B_PEN', '← Pending', L.filter(i => pgM(p, i)[s]).length]); } });
   const F = fwd.filter(x => x[2]), B = bk.filter(x => x[2]);
-  const noBub = sp.length === 1 && /^(\d+|REST)$/.test(sp[0].spool) && pgPieceShipOk(p, sp[0].iso) && (p.dwx || {})['ISO:' + sp[0].iso] && !pgBubblesOk(p, sp[0].iso) && ['Ready', 'In shop'].includes(inf.get(sp[0].id).status);
-  const auto = noBub ? 'To ship only a section, every joint of this ISO must be placed on its drawing (Admin → Drawings).' : sp.some(s => inf.get(s.id).status === 'Shipped' && inf.get(s.id).field) ? 'Installed goes by itself when its field joints are welded.' : sp.some(s => inf.get(s.id).status === 'In shop') ? 'Ready goes by itself when its shop joints are welded.' : '';
+  const one = items.length === 1 ? items[0] : null, i1 = one && one.kind === 'SPOOL' ? inf.get(one.id) : null;
+  const info1 = i1 ? (() => { const L = pgShips(p, one); return L.length ? L.map(x => `${fmtDate(x.date).slice(0, 6)}${x.kind === 'ALL' ? ' (complete)' : ''}${pgDnOfShip(p, x.uid) ? ' · ' + pgDnOfShip(p, x.uid).no.split('-').pop() : ''}`).join(' · ') : i1.status; })() : '';
   return `<div class="pgsheet pgc ${items.length ? 'on' : ''}" id="pgbar">
-    <div class="pgcrow"><div class="pgsum"><b>${items.length === 1 ? esc(sp.length ? `${items[0].iso} · ${spLbl(items[0].spool)}` : items[0].tag) : `${items.length} selected`}</b><span>${sp.length === 1 ? inf.get(sp[0].id).status : ''}</span></div>
-      ${F.map(([s, l, n]) => s === 'SEC' ? `<button class="btn pgsecb" data-a="pgsec">${l}</button>` : s === 'SHIPANY' ? `<button class="btn pgany" data-a="pgshipany">${l}${items.length > 1 ? ` · ${n}` : ''}</button>` : s === 'DN' ? `<button class="btn pgdnb" data-a="pgdnnew">${l}</button>` : `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` · ${n}` : ''}</button>`).join('')}
+    <div class="pgcrow"><div class="pgsum"><b>${one ? esc(one.kind === 'SPOOL' ? one.iso : one.tag) : `${items.length} selected`}</b><span>${esc(info1)}</span></div>
+      ${F.map(([s, l, n]) => s === 'PARTS' ? `<button class="btn pgsecb" data-a="pgsec">${l}</button>` : s === 'ALLS' ? `<button class="btn" data-a="pgall2" style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">${l}</button>` : s === 'DN' ? `<button class="btn pgdnb" data-a="pgdnnew">${l}</button>` : `<button class="btn" data-pgmark="${s}" style="background:${PG_STG[s].color};border-color:${PG_STG[s].color};color:${PG_STG[s].ink}">${l}${items.length > 1 ? ` · ${n}` : ''}</button>`).join('')}
       <button class="btn ghost pgx" data-a="pgclear" aria-label="Clear">✕</button></div>
-    ${B.length || auto ? `<div class="pgcrow2">${B.map(([k, l]) => `<button class="pglink" data-pgb="${k}">${l}</button>`).join('')}${auto ? `<span>${auto}</span>` : ''}</div>` : ''}</div>`;
+    ${B.length ? `<div class="pgcrow2">${B.map(([k, l]) => `<button class="pglink" data-pgb="${k}">${l}</button>`).join('')}</div>` : ''}</div>`;
 }
 async function pgItemBack(p, kind) {
   const items = pgSelItems(p);
   const ids = kind === 'B_SHIP' ? items.filter(i => i.kind === 'SPOOL' && pgM(p, i).SHIP) : kind === 'B_PNT' ? items.filter(i => pgM(p, i).PNT) : items.filter(i => i.kind !== 'SPOOL');
   if (!ids.length) return;
-  if (!await UI.confirm('Correct', `${(PG_BK.concat([['B_SHIP', '← Not shipped']]).find(x => x[0] === kind) || [0, ''])[1]} · ${ids.length} item(s)?`, 'Yes')) return;
+  if (!await UI.confirm('Correct', `${kind === 'B_SHIP' ? '← Not complete (the parts drawn stay)' : (PG_BK.find(x => x[0] === kind) || [0, ''])[1]} · ${ids.length} item(s)?`, 'Yes')) return;
   const n = pgBack(p, ids.map(i => i.id), kind === 'B_PNT' ? '-PNT' : '');
+  if (kind === 'B_SHIP') ids.forEach(sp => pgShips(p, sp).filter(x => x.kind === 'ALL').forEach(x => pgShipTakeBack(p, x)));
   PG.ui.sel = new Set(); await pgSave(); render(); UI.toast(`${n} changed.`, 'ok');
+}
+/* a shipment taken back: the one not sent yet goes away; the one already sent goes away in the office too */
+function pgShipTakeBack(p, x) {
+  if ((PG.S.shp || []).some(s => s.uid === x.uid && !s.sent)) PG.S.shp = PG.S.shp.filter(s => s.uid !== x.uid);
+  else PG.S.shpx.push({ uid: uid(), pid: p.id, shp: x.uid, at: new Date().toISOString(), sent: false });
 }
 
 /* ---------------- supports by zone ---------------- */
@@ -3332,18 +3358,20 @@ function pgDnNo(p) {
   const pre = `DN-${wo}-${pgInit(S.sup)}-`, used = (PG.S.dn || []).filter(d => d.no.startsWith(pre)).map(d => Number(d.no.slice(pre.length)) || 0);
   return pre + String(Math.max(0, ...used) + 1).padStart(3, '0');
 }
-function pgDnAsk(p, ids) {
-  if (!ids || !ids.length) return;
-  const m = UI.modal(`<h3>✓ ${ids.length} spool(s) shipped</h3><p class="msub">Make a delivery note now? It is optional: you can make it later from Shipped.</p>
+function pgDnAsk(p, shp) {
+  if (!shp || !shp.length) return;
+  const m = UI.modal(`<h3>✓ Shipped</h3><p class="msub">Make the delivery note of this truck now? You can also make it later (Spools → No note).</p>
     <div class="pgopts2"><button class="btn primary" data-x="ok">📄 Make delivery note</button><button class="btn ghost" data-x="no">Later</button></div>`);
   m.querySelector('[data-x=no]').onclick = () => UI.close();
-  m.querySelector('[data-x=ok]').onclick = () => { UI.close(); pgDnForm(p, ids); };
+  m.querySelector('[data-x=ok]').onclick = () => { UI.close(); pgDnForm(p, shp); };
 }
-function pgDnForm(p, ids, dn) {
-  ids = (dn ? dn.spools : ids) || []; if (!ids.length) return;
-  const L = ids.map(id => p.items.find(i => i.id === id)).filter(Boolean);
+/* a note holds shipments (what left in one truck); one shipment is never in two notes */
+function pgDnForm(p, shp, dn) {
+  const all = pgShipsAll(p), L = dn ? all.filter(s => (dn.shp || []).includes(s.uid)) : all.filter(s => (shp || []).includes(s.uid) && !pgDnOfShip(p, s.uid));
+  if (!dn && !L.length) { UI.toast('That is already in a delivery note.', 'err'); return; }
+  const sps = Array.from(new Set(L.map(s => s.sp)));
   const m = UI.modal(`<h3>📄 Delivery note</h3><p class="msub">${dn ? esc(dn.no) : pgDnNo(p)} · ${fmtDate(PG.ui.date || todayStr())}</p>
-    <div class="pgsml">${L.map(sp => { const i = pgSpoolInfo(p, sp); return `<div class="pgsm"><div><b>${esc(sp.iso)} · ${esc(spLbl(sp.spool))}</b><span>${i.force ? `⚠ ${i.left.length} shop joint(s) pending` : `${i.shop + i.field} joints`}</span></div></div>`; }).join('')}</div>
+    <div class="pgsml">${sps.map(id => { const it = p.items.find(i => i.id === id) || { iso: id }, part = L.some(s => s.sp === id && s.kind === 'PART') && !L.some(s => s.sp === id && s.kind === 'ALL'); return `<div class="pgsm"><div><b>${esc(it.iso)}</b><span>${part ? 'partial (what is marked on the drawing)' : 'complete'}</span></div></div>`; }).join('')}</div>
     <div class="field"><label>Truck / plate</label><input class="inp" id="dnT" value="${esc(dn ? dn.truck : '')}" style="font-size:16px"></div>
     <div class="field"><label>Received by</label><input class="inp" id="dnR" value="${esc(dn ? dn.recv : '')}" style="font-size:16px"></div>
     <div class="field"><label>Note</label><input class="inp" id="dnN" value="${esc(dn ? dn.note : '')}" style="font-size:16px"></div>
@@ -3351,7 +3379,7 @@ function pgDnForm(p, ids, dn) {
   m.querySelector('[data-x=no]').onclick = () => UI.close();
   m.querySelector('[data-x=ok]').onclick = () => {
     const v = id => m.querySelector(id).value.trim();
-    const d = dn || { uid: uid(), pid: p.id, no: pgDnNo(p), date: PG.ui.date || todayStr(), by: S.sup || '', spools: ids };
+    const d = dn || { uid: uid(), pid: p.id, no: pgDnNo(p), date: PG.ui.date || todayStr(), by: S.sup || '', spools: sps, shp: L.map(s => s.uid) };
     Object.assign(d, { truck: v('#dnT'), recv: v('#dnR'), note: v('#dnN') });
     UI.close(); pgDnSign(p, d);
   };
@@ -3387,7 +3415,8 @@ function pgDnSign(p, dn) {
 }
 async function pgDnShare(p, dn) {
   try {
-    const doc = await dnPdf(p, dn, { getM: it => pgM(p, it), dwx: iso => (p.dwx || {})['ISO:' + iso] || null, mat: iso => (p.mats || {})[iso] || '', bands: (iso, sps) => pgBands(p, iso).filter(b => sps.includes(b.nm)) });
+    const S2 = pgShipsAll(p).filter(s => (dn.shp || []).includes(s.uid));
+    const doc = await dnPdf(p, dn, { getM: it => pgM(p, it), dwx: iso => (p.dwx || {})['ISO:' + iso] || null, mat: iso => (p.mats || {})[iso] || '', part: id => S2.some(s => s.sp === id) && !S2.some(s => s.sp === id && s.kind === 'ALL'), bands: iso => S2.filter(s => s.iso === iso).flatMap(s => (s.lines || []).map(pts => ({ pts }))) });
     const fname = `${dn.no}.pdf`, how = await shareOrDownload(doc.output('blob'), fname, `Delivery note ${dn.no}`);
     if (how !== 'cancelled') UI.toast(how === 'shared' ? 'Delivery note shared.' : `Saved: ${fname}`, 'ok');
   } catch (e) { UI.alert('Delivery note', 'The PDF could not be made.\n' + (e.message || e)); }
@@ -3409,31 +3438,24 @@ function pgDnList(p) {
 }
 /* void a note made by mistake: it stays in the list crossed out (the Admin sees it); its spools stay shipped and go back to "no note" */
 function pgDnVoid(p, d) {
-  const m = UI.modal(`<h3>🚫 Void ${esc(d.no)}?</h3><p class="msub">The note stays in the list crossed out (the Admin sees it). Its ${d.spools.length} spool(s) stay shipped and go back to “No note”.</p>
+  const m = UI.modal(`<h3>🚫 Void ${esc(d.no)}?</h3><p class="msub">The note stays in the list crossed out (the Admin sees it). What it shipped stays shipped and goes back to “No note”, unless you tick the box.</p>
     <div class="field"><label>Reason (required)</label><input class="inp" id="dvWhy" placeholder="e.g. wrong spools" style="font-size:16px"></div>
-    <label class="pgchk"><input type="checkbox" id="dvBack"> They did not leave: take back the shipping (back to shop)</label>
+    <label class="pgchk"><input type="checkbox" id="dvBack"> It did not leave: take back what this note shipped</label>
     <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn pgvb2" data-x="ok">Void</button></div>`, { locked: true });
   m.querySelector('[data-x=no]').onclick = () => { UI.close(); pgDnList(p); };
   m.querySelector('[data-x=ok]').onclick = async () => {
     const why = m.querySelector('#dvWhy').value.trim(); if (!why) { UI.toast('Write the reason.', 'err'); return; }
     d.void = { date: PG.ui.date || todayStr(), by: S.sup || '', why, at: new Date().toISOString() }; d.sent = false;
-    if (m.querySelector('#dvBack').checked) pgBack(p, d.spools || [], '');
+    if (m.querySelector('#dvBack').checked) pgShipsAll(p).filter(x => (d.shp || []).includes(x.uid)).forEach(x => { if (x.kind === 'ALL') pgBack(p, [x.sp], ''); pgShipTakeBack(p, x); });
     await pgSave(); UI.close(); render(); UI.toast(`${d.no} void.`, 'ok');
   };
 }
-/* a new note from the selection: the spools already in another note are left out (warned first) */
+/* a new note from the selection: what left without a note */
 function pgDnNew(p) {
-  const L = pgSelItems(p).filter(i => i.kind === 'SPOOL' && pgM(p, i).SHIP);
-  const inN = L.filter(i => pgDnOf(p, i.id)), free = L.filter(i => !pgDnOf(p, i.id));
-  if (!inN.length) { pgDnForm(p, free.map(i => i.id)); return; }
-  const m = UI.modal(`<h3>⚠ Already in a note</h3><p class="msub">These spools are already in another delivery note. They are left out of the new one.</p>
-    <div class="pgsml">${inN.map(sp => `<div class="pgsm"><div><b>${esc(sp.iso)} · ${esc(spLbl(sp.spool))}</b><span>📄 ${esc(pgDnOf(p, sp.id).no)}</span></div></div>`).join('')}</div>
-    <p class="msub" style="margin-top:8px">${free.length ? `The new note takes <b>${free.length} spool(s)</b>: ${free.map(sp => esc(spLbl(sp.spool))).join(', ')}.` : 'Nothing is left for a new note.'}</p>
-    <div class="mbtns"><button class="btn ghost" data-x="no">${free.length ? 'Cancel' : 'Close'}</button>${free.length ? `<button class="btn primary" data-x="ok">Continue · ${free.length} spool(s)</button>` : ''}</div>`);
-  m.querySelector('[data-x=no]').onclick = () => UI.close();
-  const ok = m.querySelector('[data-x=ok]'); if (ok) ok.onclick = () => { UI.close(); pgDnForm(p, free.map(i => i.id)); };
+  const L = pgSelItems(p).filter(i => i.kind === 'SPOOL').flatMap(sp => pgShips(p, sp)).filter(x => !pgDnOfShip(p, x.uid));
+  if (!L.length) { UI.toast('That is already in a delivery note.', 'err'); return; }
+  pgDnForm(p, L.map(x => x.uid));
 }
-
 /* ---------------- JOINTS: every joint of the project, with filters ---------------- */
 function pgJoints(p) {
   const f = PG.ui.jf || 'all', isoL = Array.from(new Set(p.items.filter(i => i.kind === 'JOINT').map(i => i.iso))).sort(cmpStr);
@@ -3519,11 +3541,11 @@ function dnRows(p, dn, ctx) {
     const nds = J.map(i => i.nd || 0).filter(Boolean), lo = Math.min(...nds), hi = Math.max(...nds);
     const size = nds.length ? (lo === hi ? `${hi}"` : `${lo}"–${hi}"`) : '';
     const mat = ctx.mat ? ctx.mat(sp.iso) : '';
-    const whole = /^\d+$/.test(sp.spool), others = p.items.filter(i => i.kind === 'SPOOL' && i.iso === sp.iso && i.id !== sp.id && !(dn.spools || []).includes(i.id));
-    return { sp, left, why: sh.note || '', desc: [size ? `${size} spool` : 'Spool', mat].filter(Boolean).join(' · '), section: !whole && others.length > 0 };
+    const part = ctx.part ? ctx.part(sp.id) : false, ea = p.items.filter(i => i.kind === 'SPOOL' && i.iso === sp.iso).length;
+    return { sp, left: part ? [] : left, why: sh.note || '', desc: [size ? `${size} piping` : 'Piping', mat].filter(Boolean).join(' · '), part, ea };
   });
 }
-const dnObs = r => [r.section ? 'Section of the ISO (the rest is not in this note)' : '', r.left.length ? `Shipped incomplete: shop joint(s) ${r.left.map(i => i.joint).join(', ')} to weld on site${r.why ? ' · reason: ' + r.why : ''}` : ''].filter(Boolean).join(' · ') || '—';
+const dnObs = r => r.part ? 'Partial shipment · the rest of this ISO stays in shop' : r.left.length ? `Complete · shop joint(s) ${r.left.map(i => i.joint).join(', ')} to weld on site${r.why ? ' · reason: ' + r.why : ''}` : 'Complete';
 const dnHM = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const dnDay = iso => { const d = new Date(iso); return isNaN(d) ? '' : todayStr(d); };
 const dnImgFmt = s => /^data:image\/png/i.test(String(s)) ? 'PNG' : 'JPEG';
@@ -3546,7 +3568,7 @@ async function dnPdf(p, dn, ctx) {
   const R = dnRows(p, dn, ctx), nav = '#1C0B5B';
   const wo = String(p.wo || '').trim();
   const head = (title) => pdfHeader(doc, { logo: LOGO_QSL, logoRatio: LOGO_RATIO, title, subtitle: 'QSL PROGRESS', form: 'QSL_PR_DN', prepared: dn.by || '', date: dn.date,
-    summary: `${p.name}${wo ? ' · ' + wo : ''}  |  Delivery note ${dn.no}  |  ${R.length} spool(s)` });
+    summary: `${p.name}${wo ? ' · ' + wo : ''}  |  Delivery note ${dn.no}  |  ${R.length} item(s)` });
   /* ---------- page 1: the note ---------- */
   let y = head('SPOOL DELIVERY NOTE') + 6;
   const W = doc.internal.pageSize.getWidth(), L = 10, Rm = W - 10;
@@ -3556,13 +3578,14 @@ async function dnPdf(p, dn, ctx) {
   y = doc.lastAutoTable.finalY + 4;
   if (dn.void) { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(194, 24, 91);
     const vt = doc.splitTextToSize(`VOID · ${fmtDate(dn.void.date)}${dn.void.by ? ' · by ' + dn.void.by : ''}${dn.void.why ? ' · reason: ' + dn.void.why : ''}`, Rm - L); doc.text(vt, L, y + 3); y += 4.6 * vt.length + 2; doc.setTextColor(0); }
-  const body = R.map((r, k) => [String(k + 1), r.sp.iso, spLbl(r.sp.spool), r.desc, dnObs(r)]);
-  body.push(['', 'TOTAL', String(R.length), `${R.length} spool(s) in this truck`, '']);
-  doc.autoTable({ startY: y, margin: { left: L, right: L }, head: [['#', 'ISOMETRIC', 'SPOOL', 'DESCRIPTION', 'OBSERVATION']], body,
+  const sc = R.some(r => r.ea > 1);      /* the SPOOL column only when an ISO is built more than once (EA) */
+  const body = R.map((r, k) => [String(k + 1), r.sp.iso].concat(sc ? [r.ea > 1 ? spLbl(r.sp.spool) : ''] : [], [r.desc, dnObs(r)]));
+  body.push(['', 'TOTAL'].concat(sc ? [''] : [], [`${R.length} item(s) in this truck`, '']));
+  doc.autoTable({ startY: y, margin: { left: L, right: L }, head: [['#', 'ISOMETRIC'].concat(sc ? ['SPOOL'] : [], ['DESCRIPTION', 'OBSERVATION'])], body,
     styles: { fontSize: 8.8, cellPadding: 1.9, overflow: 'linebreak', lineColor: [227, 225, 236], lineWidth: 0.1 }, headStyles: { fillColor: [28, 11, 91], textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 34, fontStyle: 'bold' }, 2: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }, 3: { cellWidth: 42 } },
+    columnStyles: sc ? { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 34, fontStyle: 'bold' }, 2: { cellWidth: 18, halign: 'center', fontStyle: 'bold' }, 3: { cellWidth: 42 } } : { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 40, fontStyle: 'bold' }, 2: { cellWidth: 46 } },
     didParseCell: d => { if (d.section !== 'body') return; if (d.row.index === body.length - 1) { d.cell.styles.fillColor = [236, 234, 246]; d.cell.styles.fontStyle = 'bold'; }
-      else if (R[d.row.index] && R[d.row.index].left.length && d.column.index === 4) { d.cell.styles.textColor = [194, 78, 0]; d.cell.styles.fontStyle = 'bold'; } },
+      else if (R[d.row.index] && (R[d.row.index].left.length || R[d.row.index].part) && d.column.index === (sc ? 4 : 3)) { d.cell.styles.textColor = [194, 78, 0]; d.cell.styles.fontStyle = 'bold'; } },
     didDrawPage: () => {} });
   y = doc.lastAutoTable.finalY + 4;
   /* signatures */
@@ -3582,11 +3605,11 @@ async function dnPdf(p, dn, ctx) {
   const isoL = Array.from(new Set(R.map(r => r.sp.iso))).sort(cmpStr);
   for (const iso of isoL) {
     doc.addPage('letter', 'landscape');
-    const mine = R.filter(r => r.sp.iso === iso), rest = mine.some(r => r.section);
+    const mine = R.filter(r => r.sp.iso === iso), rest = mine.some(r => r.part);
     let ty = head(`SPOOL DELIVERY NOTE · ${iso}`) + 5;
     const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(28, 11, 91);
-    doc.text(`In this note: ${mine.map(r => spLbl(r.sp.spool)).join(', ')}${rest ? '  (section · the rest of this ISO is not in this note)' : ''}`, 10, ty); doc.setTextColor(0);
+    doc.text(rest ? 'Partial shipment: what leaves is shaded on the drawing · the rest of this ISO stays in shop' : 'Complete shipment of this ISO', 10, ty); doc.setTextColor(0);
     ty += 4;
     const sideW = 78, bx = 10, by = ty, bw = PW - 20 - sideW - 6, bh = PH - ty - 14;
     const d = ctx.dwx(iso), bands = d && ctx.bands ? ctx.bands(iso, mine.map(r => r.sp.spool)) : [];
@@ -3608,13 +3631,13 @@ async function dnPdf(p, dn, ctx) {
     }
     /* right column: the spools of this ISO in the note + legend */
     const sx = PW - 10 - sideW;
-    doc.autoTable({ startY: by, margin: { left: sx, right: 10 }, tableWidth: sideW, head: [['SPOOL', 'OBSERVATION']],
-      body: mine.map(r => [spLbl(r.sp.spool), dnObs(r)]),
+    doc.autoTable({ startY: by, margin: { left: sx, right: 10 }, tableWidth: sideW, head: [['ISO', 'OBSERVATION']],
+      body: mine.map(r => [r.ea > 1 ? spLbl(r.sp.spool) : iso.split('-').slice(-2).join('-'), dnObs(r)]),
       styles: { fontSize: 8.2, cellPadding: 1.5, overflow: 'linebreak' }, headStyles: { fillColor: [28, 11, 91] }, columnStyles: { 0: { cellWidth: 16, fontStyle: 'bold' } },
       didParseCell: c => { if (c.section === 'body' && mine[c.row.index] && mine[c.row.index].left.length && c.column.index === 1) c.cell.styles.textColor = [194, 78, 0]; } });
     let ly = doc.lastAutoTable.finalY + 6;
     if (bands.length || pend.length) { doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(28, 11, 91); doc.text('LEGEND', sx, ly); ly += 5; doc.setFont('helvetica', 'normal'); doc.setTextColor(40); }
-    if (bands.length) { doc.setFillColor(220, 206, 244); doc.roundedRect(sx, ly - 2.6, 4.4, 2.8, 1.2, 1.2, 'F'); doc.text('Section in this note', sx + 6, ly); ly += 5.2; }
+    if (bands.length) { doc.setFillColor(220, 206, 244); doc.roundedRect(sx, ly - 2.6, 4.4, 2.8, 1.2, 1.2, 'F'); doc.text('What leaves in this truck', sx + 6, ly); ly += 5.2; }
     if (pend.length) { doc.setFillColor(255, 255, 255); doc.setDrawColor(214, 31, 140); doc.setLineWidth(0.6); doc.circle(sx + 2, ly - 1.2, 1.6, 'FD'); doc.text('Shop joint to weld on site', sx + 6, ly); ly += 5.2; }
   }
   /* footer of every page with its own size (portrait first page, landscape drawings) */
