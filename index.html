@@ -997,7 +997,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.9.3';
+const APP_VERSION = '2.9.4';
 /* spool name for people: 01 -> SP01 · a piece of an ISO (P1, 01-P2) keeps its name */
 const spLbl = s => !s ? '' : String(s).replace(/(^|-)REST$/, '$1Rest').replace(/^(\d+)$/, 'SP$1').replace(/^(\d+-)/, 'SP$1');
 /* highlighter of a section of an ISO: the finger line becomes straight runs in the directions of the drawing (every 15°: 0°, 30°, 90°…) */
@@ -2430,7 +2430,8 @@ function pgWireMap() {
     if (pinch && ptrs.size === 2) {
       const [a, b] = Array.from(ptrs.values()), d = Math.hypot(a[0] - b[0], a[1] - b[1]);
       const full = pgBox(p), w = Math.min(full[2], Math.max(full[2] / 40, pinch.vb[2] * pinch.d / Math.max(10, d))), k = w / pinch.vb[2];
-      setVB([pinch.c[0] - (pinch.c[0] - pinch.vb[0]) * k, pinch.c[1] - (pinch.c[1] - pinch.vb[1]) * k, w, pinch.vb[3] * k]); return;
+      setVB([pinch.c[0] - (pinch.c[0] - pinch.vb[0]) * k, pinch.c[1] - (pinch.c[1] - pinch.vb[1]) * k, w, pinch.vb[3] * k]);
+      const q = pt((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), v = getVB(); setVB([v[0] + pinch.c[0] - q[0], v[1] + pinch.c[1] - q[1], v[2], v[3]]); return;     /* two fingers also move the drawing */
     }
     if (!st) return;
     if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > (e.pointerType === 'mouse' ? 6 : 14)) st.moved = true;   /* a finger trembles a little: still a tap */
@@ -2850,7 +2851,7 @@ function pgIsoPicker(p) {
     const tf = G.reduce((a, g) => a + pgAvail(p, g, 'FIT').length, 0), tw = G.reduce((a, g) => a + pgAvail(p, g, 'WEL').length, 0);
     return `<button class="pgcard" data-pgiso="${esc(iso)}"><span class="r1"><b class="n" style="font-size:18px">${esc(iso)} <small class="pgsm2">· ${pgPzInfo(p, iso) ? ea + ' pieces' : `${ea} spool${ea === 1 ? '' : 's'}`}${p.dwx && p.dwx['ISO:' + iso] ? ' · 🗺' : ''}</small></b><b class="pc" style="font-size:13px;text-align:right"><span style="color:#B38F00">FIT ${f.toFixed(0)}%</span><br><span style="color:#2E9D5B">WELD ${w.toFixed(0)}%</span></b></span>
       <span class="s">${tf || tw ? `${tf ? `<b>${tf}</b> to fit-up` : ''}${tf && tw ? ' · ' : ''}${tw ? `<b>${tw}</b> to weld` : ''}` : 'nothing pending'}</span>
-      ${pgPartial(p, iso)}<span class="pgpbar"><i style="width:${Math.min(100, w)}%;background:${PG_STG.WEL.color}"></i></span></button>`; }).join('') || '<div class="hint">No joints.</div>'}</div>`;
+      <span class="pgpbar"><i style="width:${Math.min(100, w)}%;background:${PG_STG.WEL.color}"></i></span></button>`; }).join('') || '<div class="hint">No joints.</div>'}</div>`;
 }
 /* one row of the joint list */
 function pgStWord(g) {
@@ -2873,12 +2874,11 @@ function pgIsoBubs(p) {
   const wedge = (a0, a1, col) => { if (a1 - a0 <= 0.0001) return ''; if (a1 - a0 >= 0.9999) return `<circle r="${R}" fill="${col}"/>`;
     const p0 = [R * Math.sin(2 * Math.PI * a0), -R * Math.cos(2 * Math.PI * a0)], p1 = [R * Math.sin(2 * Math.PI * a1), -R * Math.cos(2 * Math.PI * a1)];
     return `<path d="M0,0 L${p0[0]},${p0[1]} A${R},${R} 0 ${a1 - a0 > 0.5 ? 1 : 0} 1 ${p1[0]},${p1[1]} Z" fill="${col}"/>`; };
-  const out = pgBands(p, PG.ui.isoV).concat((PG.ui.hl || []).map(L => ({ pts: L, col: PG_HL, op: 0.55 }))).map(b => `<polyline points="${b.pts.map(q => `${q[0] * d.w},${q[1] * d.h}`).join(' ')}" fill="none" stroke="${b.col}" stroke-opacity="${b.op}" stroke-width="${d.w / 70}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" style="mix-blend-mode:multiply"/>`), PZ = pgPzInfo(p, PG.ui.isoV), lined = new Set(Object.keys((p.pzl || {})[PG.ui.isoV] || {}));
+  const out = (PG.ui.q ? PG.ui.hl || [] : []).map(L => ({ pts: L, col: PG_HL, op: 0.55 })).map(b => `<polyline points="${b.pts.map(q => `${q[0] * d.w},${q[1] * d.h}`).join(' ')}" fill="none" stroke="${b.col}" stroke-opacity="${b.op}" stroke-width="${d.w / 70}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" style="mix-blend-mode:multiply"/>`), PZ = pgPzInfo(p, PG.ui.isoV), lined = new Set(Object.keys((p.pzl || {})[PG.ui.isoV] || {}));
   Object.entries(d.mk || {}).forEach(([j, xy]) => {
     const g = byJ.get(j); if (!g) return;
     const x = xy[0] * d.w, y = xy[1] * d.h, sel = PG.ui.sel.has(g.key);
-    const hc = PZ && g.ea === 1 && !lined.has(g.items[0].spool) ? PZ.col(g.items[0]) : '';      /* pieces without a highlighted line: a halo with the color of the day it was shipped */
-    if (hc) out.push(`<circle cx="${x}" cy="${y}" r="${R * 1.75}" fill="${hc}" opacity=".55" pointer-events="none"/>`);
+
     const txt = (fill, sz) => `<text y="${R * 0.36}" font-size="${R * sz}" font-family="Arial" font-weight="700" text-anchor="middle" fill="${fill}" stroke="${fill === '#fff' ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.7)'}" stroke-width="${R / 14}" paint-order="stroke" pointer-events="none">${esc(g.joint)}</text>`;
     const cnt = v => zoomed ? `<text y="${R * 1.85}" font-size="${R * 0.62}" font-family="Arial" font-weight="800" text-anchor="middle" fill="#1C0B5B" stroke="#fff" stroke-width="${R / 6}" paint-order="stroke" pointer-events="none">${v}</text>` : '';
     if (g.kind === 'TORQUE') {
@@ -2910,17 +2910,30 @@ function pgIsoListHtml(p) {
   return { n: todo.length, chips: `<div class="pgchips"><button class="${all ? '' : 'on'}" data-pgf="todo">To do · ${todo.length}</button><button class="${all ? 'on' : ''}" data-pgf="all">All · ${G.length}</button></div>`,
     html: rows.map(g => pgJRow(p, g)).join('') || `<div class="hint">${all ? 'No joints.' : 'Nothing to do here. Tap All to see the done ones.'}</div>` };
 }
+/* dispatch: its own clean screen, only the drawing, the highlighter and Move (nothing of the shipping shows in the isometrics) */
+function pgDispView(p) {
+  const q = PG.ui.q, cur = q.list[q.i];
+  return `<div class="app pgapp pgmapmode pgisoapp">
+    <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgtrkstop">✕ Stop</button>
+      <div class="pgmt"><b>🚚 Dispatch · ${esc(cur.iso)}</b><span>${q.list.length > 1 ? `${q.i + 1} of ${q.list.length} · ` : ''}${esc(p.name)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
+    <div class="pgstage pgisost"><div class="pgisol"><div class="pgmap" id="pgmapbox">${pgIsoSvg(p)}</div>
+        <div class="pgfabs l">${[['hl', 'Mark'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${k === 'hl' ? 'hl ' : ''}${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${k === 'hl' ? '<b style="font-size:20px;line-height:1">🖍</b>' : PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
+        <div class="pgmode" id="pgmode">${PG_MODE_ISO[PG.ui.mode] || ''}</div>
+        <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button></div>
+        ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The drawing is bigger sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}</div>
+    </div>${pgTruckBar(p)}</div>`;
+}
 function pgIsoView(p) {      /* like the dome: the drawing rules; the joint list opens and closes */
+  if (PG.ui.q) return pgDispView(p);
   const L = pgIsoListHtml(p), ea = new Set(pgIsoJoints(p, PG.ui.isoV).flatMap(g => g.items.map(i => i.spool)).filter(Boolean)).size, PZ = pgPzInfo(p, PG.ui.isoV);
   return `<div class="app pgapp pgmapmode pgisoapp">
     <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgisos">⇆ ISOs</button>
       <div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${PZ ? `${PZ.n} pieces` : `${ea} spool${ea === 1 ? '' : 's'}`} · ${esc(p.name)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
     <div class="pgstage pgisost"><div class="pgisol"><div class="pgmap" id="pgmapbox">${pgIsoSvg(p)}</div>
-        <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}${pgPieceShipOk(p) ? `<button class="pgmfab hl ${PG.ui.mode === 'hl' ? 'on' : ''}" data-pgm="hl"><b style="font-size:20px;line-height:1">🖍</b><span>Ship</span></button>` : ''}</div>
+        <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
         <div class="pgmode" id="pgmode">${PG_MODE_ISO[PG.ui.mode] || ''}</div>
         <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button></div>
         <div class="pglegline"><span><i style="background:#fff"></i>to do</span><span><i style="background:${PG_STG.FIT.color}"></i>fit-up</span><span><i style="background:${PG_STG.WEL.color}"></i>welded</span>${pgPaintJ(p) ? `<span><i style="background:${PG_STG.PNT.color}"></i>painted</span>` : ''}${pgTrqOn(p) ? `<span><i style="background:${PG_STG.TRQ.color};border-radius:3px"></i>torque</span>` : ''}<span><i style="background:#fff;border:1.5px solid ${PG_STG.REP.color}"></i>repair</span><span><i style="background:#fff;border-style:dashed"></i>in shop</span></div>
-        ${PZ && PZ.days.length ? `<div class="pgpzleg">${PZ.days.map(dd => `<span><i style="background:${PZ.dc(dd)}"></i>Shipped ${esc(fmtDate(dd).slice(0, 6))}</span>`).join('')}<span><i style="background:#fff;border:1.5px solid #1C0B5B"></i>In shop</span></div>` : ''}
         ${PG.ui.jl ? '' : `<button class="pgjtab" data-a="pgjl">Joints ◂ <b>${L.n}</b></button>`}
         ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The drawing is bigger sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}</div>
       ${PG.ui.jl ? `<div class="pgside"><div class="pgsideh">${L.chips}<button class="pgtg" data-a="pgjl" aria-label="Close the list">✕</button></div><div class="pglist2">${L.html}</div></div>` : ''}
@@ -2972,7 +2985,7 @@ function pgTruckBar(p) {
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean).filter(g => pgFreeJoint(p, g.items[0]));
   return `<div class="pgsheet pgc on" id="pgbar">
     <div class="pgcrow"><div class="pgsum"><b>🚚 ${esc(q.list[q.i].iso)} · ${q.i + 1} of ${q.list.length}</b><span>${G.length ? `${G.length} joint(s) under the line: ${G.map(g => esc(g.joint)).join(' · ')}` : 'Pass your finger over the pipe that leaves.'}</span></div>
-      <button class="btn ghost pgx" data-a="pgtrkstop" aria-label="Stop">✕</button></div>
+</div>
     <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase</button><button class="btn ghost" data-a="pgtrkwhole">Whole ISO</button><button class="btn" data-a="pgtrksec" ${G.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">${last ? (q.list.length > 1 ? 'Ship all ✓' : 'Ship ✓') : 'Next →'}</button></div></div>`;
 }
 /* the section becomes a piece (P1, P2…) of the ISO and leaves today; the rest of the ISO stays in shop */
@@ -3093,7 +3106,7 @@ function pgPzInfo(p, iso) {
   const dc = dd => PG_PZCOL[days.indexOf(dd) % PG_PZCOL.length];
   return { n: SP.length, days, dc, col: it => { const sp = it.spool && pgSpoolOf(p, it), sh = sp && pgM(p, sp).SHIP; return sh ? dc(sh.date) : ''; } };
 }
-const PG_MODE_ISO = { tap: 'Mode: Tap · touch a joint', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the drawing', hl: 'Ship a section · pass your finger over the pipe' };
+const PG_MODE_ISO = { tap: 'Mode: Tap · touch a joint', box: 'Mode: Box · drag a box', pan: 'Move: drag the drawing · your marks stay', hl: 'Mark: pass your finger over the pipe that leaves' };
 function pgIsoList(p) {        /* no drawing: the joint list alone */
   const G = pgIsoJoints(p, PG.ui.isoV), L = pgIsoListHtml(p), ea = new Set(G.flatMap(g => g.items.map(i => i.spool))).size;
   return `<div class="pgisoh"><button class="pgpj" data-a="pgisos">⇆ ISOs</button><div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${ea} spool${ea === 1 ? '' : 's'} · no drawing</span></div></div>
@@ -3103,7 +3116,7 @@ function pgIsoList(p) {        /* no drawing: the joint list alone */
 const PG_FWD = [['FIT', 'Fit-up ✓'], ['WEL', 'Weld ✓'], ['PNT', 'Painted ✓'], ['TRQ', 'Torque ✓'], ['REP', 'Repair']];
 const PG_BK = [['B_PNT', '← No paint'], ['B_FIT', '← Fit-up'], ['B_PEN', '← Pending']];
 function pgIsoBar(p) {
-  if ((PG.ui.mode === 'hl' || PG.ui.q) && pgIsoMode(p)) return pgHlBar(p);
+  if (PG.ui.q && pgIsoMode(p)) return pgTruckBar(p);
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean), one = G.length === 1 ? G[0] : null;
   const fwd = PG_FWD.filter(([s]) => s !== 'PNT' || pgPaintJ(p)).map(([s, l]) => [s, l, G.reduce((a, g) => a + pgAvail(p, g, s).length, 0)]).filter(x => x[2]);
   const bk = PG_BK.filter(([k]) => k !== 'B_PNT' || pgPaintJ(p)).map(([k, l]) => [k, l, G.reduce((a, g) => a + (g.kind === 'TORQUE' && k !== 'B_PEN' ? 0 : pgBackList(p, g, k).length), 0)]).filter(x => x[2]);
