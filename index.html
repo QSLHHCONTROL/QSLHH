@@ -570,6 +570,11 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgseg button{flex:1 0 auto;min-height:38px;border:none;border-radius:11px;background:transparent;font-weight:800;font-size:12.5px;color:var(--muted,#6B6790);padding:0 10px;white-space:nowrap}
 .pgseg button.on{background:var(--q);color:#fff}
 .pgacts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin:-2px 0 8px}.pgacts .pgselall,.pgacts .pgnn{margin-left:0}
+
+/* ship a section (highlighter) · partial ISO */
+.pgmfab.hl.on{background:#FF6A00;border-color:#FF6A00;color:#fff}
+.pgpart{display:flex;align-items:center;gap:8px;margin:2px 0 6px;font-size:12px}.pgpart b{color:#5A3C8C}.pgpart>span{display:flex;gap:3px;margin-left:auto}.pgpart i{width:18px;height:8px;border-radius:4px;display:block}
+.pgchk{display:flex;gap:8px;align-items:flex-start;font-size:14px;margin:6px 0 2px;line-height:1.35}.pgchk input{width:20px;height:20px;flex:none;margin-top:1px}
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -988,9 +993,34 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '2.8.1';
+const APP_VERSION = '2.9.0';
 /* spool name for people: 01 -> SP01 · a piece of an ISO (P1, 01-P2) keeps its name */
-const spLbl = s => !s ? '' : /^\d+$/.test(String(s)) ? 'SP' + s : /^\d+-/.test(String(s)) ? 'SP' + s : String(s);
+const spLbl = s => !s ? '' : String(s).replace(/(^|-)REST$/, '$1Rest').replace(/^(\d+)$/, 'SP$1').replace(/^(\d+-)/, 'SP$1');
+/* highlighter of a section of an ISO: the finger line becomes straight runs in the directions of the drawing (every 15°: 0°, 30°, 90°…) */
+function pzStraight(pts, w) {
+  if (!pts || pts.length < 2) return [];
+  const eps = w / 90;
+  const rdp = P => { if (P.length < 3) return P; const a = P[0], b = P[P.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; let mi = 0, md = 0;
+    for (let i = 1; i < P.length - 1; i++) { const d = Math.abs((b[0] - a[0]) * (a[1] - P[i][1]) - (a[0] - P[i][0]) * (b[1] - a[1])) / L; if (d > md) { md = d; mi = i; } }
+    return md > eps ? rdp(P.slice(0, mi + 1)).slice(0, -1).concat(rdp(P.slice(mi))) : [a, b]; };
+  const S = rdp(pts), out = [S[0].slice()], st = Math.PI / 12; let la = null;
+  for (let i = 1; i < S.length; i++) {
+    const prev = out[out.length - 1], dx = S[i][0] - prev[0], dy = S[i][1] - prev[1], L = Math.hypot(dx, dy); if (L < eps * 0.6) continue;
+    const a = Math.round(Math.atan2(dy, dx) / st) * st, pr = dx * Math.cos(a) + dy * Math.sin(a), q = [prev[0] + pr * Math.cos(a), prev[1] + pr * Math.sin(a)];
+    if (la !== null && Math.abs(a - la) < 1e-6 && out.length > 1) out[out.length - 1] = [out[out.length - 2][0] + (q[0] - out[out.length - 2][0]), out[out.length - 2][1] + (q[1] - out[out.length - 2][1])]; else out.push(q);
+    la = a;
+  }
+  return out.length > 1 ? out : [];
+}
+/* joints whose bubble lies on the line (distance to a run under r) */
+function pzNear(lines, mk, w, h, r) {
+  const seg = (p, a, b) => { const vx = b[0] - a[0], vy = b[1] - a[1], L2 = vx * vx + vy * vy || 1; let t = ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / L2; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy); };
+  const out = [];
+  Object.entries(mk || {}).forEach(([j, xy]) => { const q = [xy[0] * w, xy[1] * h]; if (lines.some(L => L.some((pt, i) => i > 0 && seg(q, [L[i - 1][0] * w, L[i - 1][1] * h], [pt[0] * w, pt[1] * h]) <= r))) out.push(j); });
+  return out;
+}
+/* colors of the days a section left (the same on the phone, the Admin and the PDFs) */
+const PZ_DAY = ['#F2C200', '#E0479E', '#29B6F6', '#8E5CD9', '#FF6A00', '#2E9D5B'];
 /* copy of the ISO (EA) an item belongs to: 01, 02… (old items without cp: from the spool name) */
 const cpOf = it => it.cp || (/^\d+$/.test(it.spool || '') ? it.spool : (String(it.spool || '').match(/^(\d+)-/) || [])[1] || '01');
 const QSL = {
@@ -1985,7 +2015,7 @@ async function pgLoad() {
   if (!PG.S.days) PG.S.days = [];      /* day log: fitters, welders, hours */
   if (!PG.S.rolls) PG.S.rolls = [];    /* dome rolls received / returned */
   if (!PG.S.dl) PG.S.dl = {};          /* day log on/off set on this phone (by project) */
-  ['zev', 'hyd', 'opened', 'dn'].forEach(k => { if (!PG.S[k]) PG.S[k] = []; });   /* supports by zone, hydro tests, projects opened */
+  ['zev', 'hyd', 'opened', 'dn', 'pz'].forEach(k => { if (!PG.S[k]) PG.S[k] = []; });   /* pz: sections of an ISO shipped from the field (pieces) */   /* supports by zone, hydro tests, projects opened */
   if (!PG.S.dec) PG.S.dec = {};        /* locked projects opened on this phone */
   if (!PG.S.codes) PG.S.codes = {};
 }
@@ -1994,11 +2024,11 @@ async function pgSave() { PG.cache = null; const ok = await Store.set('progress'
 const pgAll = () => (PG.S && PG.S.lists ? PG.S.lists.projects : []) || [];
 const pgProjects = () => pgAll().map(p => p.lock ? (PG.S.dec[p.id] || { id: p.id, type: p.type, name: p.name, locked: true, items: [], marks: {} }) : p);
 const pgProj = id => pgProjects().find(p => p.id === id);
-const pgCur = () => { const p = pgProj(PG.ui.pid); return p && !p.locked ? p : null; };
+const pgCur = () => { const p = pgProj(PG.ui.pid); if (p && !p.locked && typeof pgPzAll === 'function') pgPzAll(p); return p && !p.locked ? p : null; };
 const pgRep = p => p.type === 'REPAIR';
 const pgDome = p => p.type === 'DOME';
 const pgIsMap = p => pgRep(p) || pgDome(p);
-const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length + ['days', 'rolls', 'zev', 'hyd', 'dn'].reduce((a, k) => a + (PG.S[k] || []).filter(d => !d.sent).length, 0) : 0;
+const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length + ['days', 'rolls', 'zev', 'hyd', 'dn', 'pz'].reduce((a, k) => a + (PG.S[k] || []).filter(d => !d.sent).length, 0) : 0;
 /* day log on: what this phone chose, or what the office set in the lists */
 const pgDlOn = p => { const o = PG.S.dl && PG.S.dl[p.id]; if (o && typeof o === 'object') return o.base === !!p.dl ? !!o.on : !!p.dl; return o === undefined ? !!p.dl : !!o; };
 const pgDay = (p, d) => (PG.S.days || []).filter(x => x.pid === p.id && x.date === d).sort((a, b) => String(a.at).localeCompare(String(b.at))).pop();
@@ -2119,11 +2149,11 @@ function pgSendSummary(nHH) {
     const un = PG.S.marks.filter(m => !m.sent);
     const rows = pgProjects().map(p => { const mk = un.filter(m => m.pid === p.id);
       const dy = (PG.S.days || []).filter(d => !d.sent && d.pid === p.id), rl = (PG.S.rolls || []).filter(r => !r.sent && r.pid === p.id);
-      const zv = (PG.S.zev || []).filter(d => !d.sent && d.pid === p.id), hy = (PG.S.hyd || []).filter(d => !d.sent && d.pid === p.id), dn = (PG.S.dn || []).filter(d => !d.sent && d.pid === p.id);
-      if (!mk.length && !dy.length && !rl.length && !zv.length && !hy.length && !dn.length) return '';
+      const zv = (PG.S.zev || []).filter(d => !d.sent && d.pid === p.id), hy = (PG.S.hyd || []).filter(d => !d.sent && d.pid === p.id), dn = (PG.S.dn || []).filter(d => !d.sent && d.pid === p.id), pz = (PG.S.pz || []).filter(d => !d.sent && d.pid === p.id);
+      if (!mk.length && !dy.length && !rl.length && !zv.length && !hy.length && !dn.length && !pz.length) return '';
       const c = {}; mk.forEach(m => { const k = m.act === 'CLR' ? 'Back to pending' : pgLabel(p, m.stage); c[k] = (c[k] || 0) + 1; });
       if (dy.length) c['Day log'] = dy.length; if (rl.length) c['Rolls'] = rl.length;
-      if (zv.length) c['Supports'] = zv.reduce((a, e) => a + (Number(e.n) || 0), 0); if (hy.length) c['Hydro tests'] = hy.length; if (dn.length) c['Delivery notes'] = dn.length;
+      if (zv.length) c['Supports'] = zv.reduce((a, e) => a + (Number(e.n) || 0), 0); if (hy.length) c['Hydro tests'] = hy.length; if (dn.length) c['Delivery notes'] = dn.length; if (pz.length) c['Sections'] = pz.length;
       return `<div class="pgsm"><div><b>${pgDome(p) ? 'Dome' : pgRep(p) ? 'Tank' : 'Piping'} · ${esc(p.name)}</b><span>${Object.keys(c).map(esc).join(' · ')}</span></div><b>${Object.values(c).join(' · ')}</b></div>`; }).join('');
     const tot = pgPending() + (nHH || 0);
     const m = UI.modal(`<h3>${icon('send')} Send to Admin</h3><p class="msub">What you send · ${fmtDate(todayStr())}</p>
@@ -2137,9 +2167,9 @@ function pgPayload() {
   const strip = x => { const y = Object.assign({}, x); delete y.sent; delete y.batch; return y; };
   return { type: 'QSL_PROGRESS_DAY', v: 3, sup: S.sup || '', dev: S.dev, at: new Date().toISOString(), marks: PG.S.marks.filter(m => !m.sent).map(strip),
     days: (PG.S.days || []).filter(d => !d.sent).map(strip), rolls: (PG.S.rolls || []).filter(r => !r.sent).map(strip),
-    zev: (PG.S.zev || []).filter(d => !d.sent).map(strip), hyd: (PG.S.hyd || []).filter(d => !d.sent).map(strip), dn: (PG.S.dn || []).filter(d => !d.sent).map(strip), opened: (PG.S.opened || []).filter(d => !d.sent).map(strip) };
+    zev: (PG.S.zev || []).filter(d => !d.sent).map(strip), hyd: (PG.S.hyd || []).filter(d => !d.sent).map(strip), dn: (PG.S.dn || []).filter(d => !d.sent).map(strip), pz: (PG.S.pz || []).filter(d => !d.sent).map(strip), opened: (PG.S.opened || []).filter(d => !d.sent).map(strip) };
 }
-async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); ['days', 'rolls', 'zev', 'hyd', 'opened', 'dn'].forEach(k => (PG.S[k] || []).forEach(d => { d.sent = true; })); await pgSave(); }
+async function pgMarkSent() { PG.S.marks.forEach(m => { m.sent = true; }); ['days', 'rolls', 'zev', 'hyd', 'opened', 'dn', 'pz'].forEach(k => (PG.S[k] || []).forEach(d => { d.sent = true; })); await pgSave(); }
 async function pgSendOnly() {
   const n = pgPending();
   if (!n) { UI.toast('No progress to send.', 'ok'); return; }
@@ -2397,7 +2427,11 @@ function pgWireMap() {
     if (!st) return;
     if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > (e.pointerType === 'mouse' ? 6 : 14)) st.moved = true;   /* a finger trembles a little: still a tap */
     if (!st.moved) return;
-    if (PG.ui.mode === 'box') {
+    if (PG.ui.mode === 'hl' && pgIsoMode(p)) {         /* highlighter: the finger draws over the pipe */
+      const q = pt(e.clientX, e.clientY); (st.path = st.path || [st.q]).push(q);
+      if (!rect) { rect = document.createElementNS('http://www.w3.org/2000/svg', 'polyline'); rect.setAttribute('fill', 'none'); rect.setAttribute('stroke', PG_HL); rect.setAttribute('stroke-opacity', '0.5'); rect.setAttribute('stroke-width', pgDwx(p).w / 70); rect.setAttribute('stroke-linecap', 'round'); rect.setAttribute('stroke-linejoin', 'round'); svg.appendChild(rect); }
+      rect.setAttribute('points', st.path.map(c => c.join(',')).join(' '));
+    } else if (PG.ui.mode === 'box') {
       const q = pt(e.clientX, e.clientY);
       if (!rect) { rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); rect.setAttribute('fill', 'rgba(255,106,0,0.12)'); rect.setAttribute('stroke', PG_SEL); rect.setAttribute('stroke-width', st.vb[2] / 300); svg.appendChild(rect); }
       rect.setAttribute('x', Math.min(q[0], st.q[0])); rect.setAttribute('y', Math.min(q[1], st.q[1])); rect.setAttribute('width', Math.abs(q[0] - st.q[0])); rect.setAttribute('height', Math.abs(q[1] - st.q[1]));
@@ -2411,6 +2445,7 @@ function pgWireMap() {
     if (pinch) { if (ptrs.size < 2) { pinch = null; later(); } return; }
     if (!st) return; const s = st; st = null;
     if (!s.moved) { if (PG.ui.mode !== 'pan') { const id = pgPick(p, svg, s.x, s.y, s.target); if (id) { if (PG.ui.sel.has(id)) PG.ui.sel.delete(id); else PG.ui.sel.add(id); pgRefresh(); } } return; }
+    if (PG.ui.mode === 'hl' && pgIsoMode(p)) { if (rect) { rect.remove(); rect = null; } pgHlAdd(p, s.path || []); return; }
     if (PG.ui.mode === 'box' && rect) {
       const q = pt(e.clientX, e.clientY), x0 = Math.min(q[0], s.q[0]), x1 = Math.max(q[0], s.q[0]), y0 = Math.min(q[1], s.q[1]), y1 = Math.max(q[1], s.q[1]);
       rect.remove(); rect = null;
@@ -2488,7 +2523,7 @@ async function pgClick(e) {
   if (d.pgt) { PG.ui.tab = d.pgt; PG.ui.sel = new Set(); PG.ui.stf = 'ALL'; PG.ui.spool = 'ALL'; render(); return; }
   if (d.pgjm) { PG.ui.jm = d.pgjm; PG.ui.sel = new Set(); render(); return; }
   if (d.pgr) { if (PG.ui.sel.has(d.pgr)) PG.ui.sel.delete(d.pgr); else PG.ui.sel.add(d.pgr); pgRefresh(); return; }
-  if (d.pgm) { PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = (pgIsoMode(p) ? PG_MODE_ISO : PG_MODE)[d.pgm] || ''; return; }
+  if (d.pgm) { if (d.pgm !== 'hl' && PG.ui.hl && PG.ui.hl.length) { PG.ui.hl = []; PG.ui.sel = new Set(); pgRefresh(); } PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = (pgIsoMode(p) ? PG_MODE_ISO : PG_MODE)[d.pgm] || ''; return; }
   if (d.pgmark && (pgIsoMode(p) || PG.ui.act === 'JNT')) { pgIsoMark(p, d.pgmark); return; }
   if (d.pgmark) {
     const date = PG.ui.date || todayStr();
@@ -2510,6 +2545,8 @@ async function pgClick(e) {
     case 'pgnonote': PG.ui.nonote = !PG.ui.nonote; PG.ui.sel = new Set(); render(); break;
     case 'pgdnlist': pgDnList(p); break;
     case 'pghome': PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.sel = new Set(); PG.ui.nonote = false; render(); break;
+    case 'pghlundo': pgHlUndo(p); break;
+    case 'pghlship': pgShipSection(p); break;
     case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
     case 'pgisos': PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
     case 'pgzsave': pgZoneSave(p); break;
@@ -2525,7 +2562,7 @@ async function pgClick(e) {
     case 'pgundo': pgUndo(); break;
     case 'send': sendToAdmin(); break;
     case 'settings': openSettings(false); break;
-    case 'pgclear': PG.ui.sel = new Set(); pgRefresh(); break;
+    case 'pgclear': PG.ui.sel = new Set(); PG.ui.hl = []; pgRefresh(); break;
     case 'pgzin': pgZoom(p, 1 / 1.5); break;
     case 'pgzout': pgZoom(p, 1.5); break;
     case 'pgzall': PG.ui.vb[pgVK(p)] = null; pgRedraw(p); break;
@@ -2801,7 +2838,7 @@ function pgIsoPicker(p) {
     const tf = G.reduce((a, g) => a + pgAvail(p, g, 'FIT').length, 0), tw = G.reduce((a, g) => a + pgAvail(p, g, 'WEL').length, 0);
     return `<button class="pgcard" data-pgiso="${esc(iso)}"><span class="r1"><b class="n" style="font-size:18px">${esc(iso)} <small class="pgsm2">· ${pgPzInfo(p, iso) ? ea + ' pieces' : `${ea} spool${ea === 1 ? '' : 's'}`}${p.dwx && p.dwx['ISO:' + iso] ? ' · 🗺' : ''}</small></b><b class="pc" style="font-size:13px;text-align:right"><span style="color:#B38F00">FIT ${f.toFixed(0)}%</span><br><span style="color:#2E9D5B">WELD ${w.toFixed(0)}%</span></b></span>
       <span class="s">${tf || tw ? `${tf ? `<b>${tf}</b> to fit-up` : ''}${tf && tw ? ' · ' : ''}${tw ? `<b>${tw}</b> to weld` : ''}` : 'nothing pending'}</span>
-      <span class="pgpbar"><i style="width:${Math.min(100, w)}%;background:${PG_STG.WEL.color}"></i></span></button>`; }).join('') || '<div class="hint">No joints.</div>'}</div>`;
+      ${pgPartial(p, iso)}<span class="pgpbar"><i style="width:${Math.min(100, w)}%;background:${PG_STG.WEL.color}"></i></span></button>`; }).join('') || '<div class="hint">No joints.</div>'}</div>`;
 }
 /* one row of the joint list */
 function pgStWord(g) {
@@ -2824,11 +2861,11 @@ function pgIsoBubs(p) {
   const wedge = (a0, a1, col) => { if (a1 - a0 <= 0.0001) return ''; if (a1 - a0 >= 0.9999) return `<circle r="${R}" fill="${col}"/>`;
     const p0 = [R * Math.sin(2 * Math.PI * a0), -R * Math.cos(2 * Math.PI * a0)], p1 = [R * Math.sin(2 * Math.PI * a1), -R * Math.cos(2 * Math.PI * a1)];
     return `<path d="M0,0 L${p0[0]},${p0[1]} A${R},${R} 0 ${a1 - a0 > 0.5 ? 1 : 0} 1 ${p1[0]},${p1[1]} Z" fill="${col}"/>`; };
-  const out = [], PZ = pgPzInfo(p, PG.ui.isoV);
+  const out = pgBands(p, PG.ui.isoV).concat((PG.ui.hl || []).map(L => ({ pts: L, col: PG_HL, op: 0.55 }))).map(b => `<polyline points="${b.pts.map(q => `${q[0] * d.w},${q[1] * d.h}`).join(' ')}" fill="none" stroke="${b.col}" stroke-opacity="${b.op}" stroke-width="${d.w / 70}" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" style="mix-blend-mode:multiply"/>`), PZ = pgPzInfo(p, PG.ui.isoV), lined = new Set(Object.keys((p.pzl || {})[PG.ui.isoV] || {}));
   Object.entries(d.mk || {}).forEach(([j, xy]) => {
     const g = byJ.get(j); if (!g) return;
     const x = xy[0] * d.w, y = xy[1] * d.h, sel = PG.ui.sel.has(g.key);
-    const hc = PZ && g.ea === 1 ? PZ.col(g.items[0]) : '';      /* pieces: a halo with the color of the day it was shipped */
+    const hc = PZ && g.ea === 1 && !lined.has(g.items[0].spool) ? PZ.col(g.items[0]) : '';      /* pieces without a highlighted line: a halo with the color of the day it was shipped */
     if (hc) out.push(`<circle cx="${x}" cy="${y}" r="${R * 1.75}" fill="${hc}" opacity=".55" pointer-events="none"/>`);
     const txt = (fill, sz) => `<text y="${R * 0.36}" font-size="${R * sz}" font-family="Arial" font-weight="700" text-anchor="middle" fill="${fill}" stroke="${fill === '#fff' ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.7)'}" stroke-width="${R / 14}" paint-order="stroke" pointer-events="none">${esc(g.joint)}</text>`;
     const cnt = v => zoomed ? `<text y="${R * 1.85}" font-size="${R * 0.62}" font-family="Arial" font-weight="800" text-anchor="middle" fill="#1C0B5B" stroke="#fff" stroke-width="${R / 6}" paint-order="stroke" pointer-events="none">${v}</text>` : '';
@@ -2867,7 +2904,7 @@ function pgIsoView(p) {      /* like the dome: the drawing rules; the joint list
     <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgisos">⇆ ISOs</button>
       <div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${PZ ? `${PZ.n} pieces` : `${ea} spool${ea === 1 ? '' : 's'}`} · ${esc(p.name)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
     <div class="pgstage pgisost"><div class="pgisol"><div class="pgmap" id="pgmapbox">${pgIsoSvg(p)}</div>
-        <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
+        <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}${pgPieceShipOk(p) ? `<button class="pgmfab hl ${PG.ui.mode === 'hl' ? 'on' : ''}" data-pgm="hl"><b style="font-size:20px;line-height:1">🖍</b><span>Ship</span></button>` : ''}</div>
         <div class="pgmode" id="pgmode">${PG_MODE_ISO[PG.ui.mode] || ''}</div>
         <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button></div>
         <div class="pglegline"><span><i style="background:#fff"></i>to do</span><span><i style="background:${PG_STG.FIT.color}"></i>fit-up</span><span><i style="background:${PG_STG.WEL.color}"></i>welded</span>${pgPaintJ(p) ? `<span><i style="background:${PG_STG.PNT.color}"></i>painted</span>` : ''}${pgTrqOn(p) ? `<span><i style="background:${PG_STG.TRQ.color};border-radius:3px"></i>torque</span>` : ''}<span><i style="background:#fff;border:1.5px solid ${PG_STG.REP.color}"></i>repair</span><span><i style="background:#fff;border-style:dashed"></i>in shop</span></div>
@@ -2876,6 +2913,82 @@ function pgIsoView(p) {      /* like the dome: the drawing rules; the joint list
         ${PG.ui.vert ? '' : `<div class="pgrot"><div><b>⟲ Turn your phone</b><span>The drawing is bigger sideways.</span><button class="btn sm" data-a="pgvert">Keep vertical</button></div></div>`}</div>
       ${PG.ui.jl ? `<div class="pgside"><div class="pgsideh">${L.chips}<button class="pgtg" data-a="pgjl" aria-label="Close the list">✕</button></div><div class="pglist2">${L.html}</div></div>` : ''}
     </div>${pgBar(p)}</div>`;
+}
+/* ISO made of pieces: "Partial · 2 of 3 shipped" and one color per piece */
+function pgPartial(p, iso) {
+  const SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === iso).sort((a, b) => cmpStr(a.spool, b.spool)); if (SP.length < 2 || SP.every(s => /^\d+$/.test(s.spool))) return '';
+  const days = Array.from(new Set(SP.map(s => (pgM(p, s).SHIP || {}).date).filter(Boolean))).sort(), n = SP.filter(s => pgM(p, s).SHIP).length;
+  return `<span class="pgpart"><b>${n === SP.length ? 'All shipped' : n ? `Partial · ${n} of ${SP.length} shipped` : `${SP.length} pieces · in shop`}</b><span>${SP.map(s => { const sh = pgM(p, s).SHIP; return `<i title="${esc(spLbl(s.spool))}" style="background:${sh ? PZ_DAY[days.indexOf(sh.date) % PZ_DAY.length] : '#E3E1EC'}"></i>`; }).join('')}</span></span>`;
+}
+/* ---------- ship a section: the one who dispatches passes the finger over the pipe that leaves ---------- */
+const PG_HL = '#FF6A00';
+const pgPieceShipOk = p => { const SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === PG.ui.isoV); return SP.length > 0 && SP.every(s => cpOf(s) === '01') && pgOn(p, 'SHIP') !== false; };
+function pgBands(p, iso) {
+  const L = (p.pzl || {})[iso] || {}, SP = p.items.filter(i => i.kind === 'SPOOL' && i.iso === iso);
+  const days = Array.from(new Set(SP.map(s => (pgM(p, s).SHIP || {}).date).filter(Boolean))).sort();
+  return Object.entries(L).flatMap(([nm, lines]) => { const sp = SP.find(s => s.spool === nm), sh = sp && pgM(p, sp).SHIP;
+    return (lines || []).map(pts => ({ nm, pts, col: sh ? PZ_DAY[days.indexOf(sh.date) % PZ_DAY.length] : '#B9B4D6', op: sh ? 0.5 : 0.45 })); });
+}
+/* joints that can still leave: in no piece yet (or in the rest of the ISO) */
+const pgFreeJoint = (p, it) => !it.spool || /^\d+$/.test(it.spool) || /(^|-)REST$/.test(it.spool);
+function pgHlAdd(p, path) {
+  const d = pgDwx(p); if (!d) return;
+  const L = pzStraight(path, d.w); if (L.length < 2) { pgRefresh(); return; }
+  const nl = L.map(c => [Math.min(1, Math.max(0, c[0] / d.w)), Math.min(1, Math.max(0, c[1] / d.h))]);
+  PG.ui.hl = (PG.ui.hl || []).concat([nl]); pgHlSel(p); pgIsoRedraw(p); pgRefresh();
+}
+function pgHlSel(p) {
+  const d = pgDwx(p), G = new Map(pgIsoJoints(p, PG.ui.isoV).map(g => [g.joint, g]));
+  PG.ui.sel = new Set(pzNear(PG.ui.hl || [], d.mk, d.w, d.h, d.w / 80 * (d.bs || 1) * 1.8).map(j => G.get(j)).filter(Boolean).map(g => g.key));
+}
+function pgHlUndo(p) { (PG.ui.hl || []).pop(); pgHlSel(p); pgIsoRedraw(p); pgRefresh(); }
+function pgHlBar(p) {
+  const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean), it = g => g.items[0];
+  const free = G.filter(g => pgFreeJoint(p, it(g))), taken = G.filter(g => !pgFreeJoint(p, it(g)));
+  const shop = free.filter(g => g.loc === 'SHOP'), left = shop.filter(g => !pgM(p, it(g)).WEL);
+  const on = (PG.ui.hl || []).length > 0;
+  return `<div class="pgsheet pgc ${on ? 'on' : ''}" id="pgbar">
+    <div class="pgcrow"><div class="pgsum"><b>🖍 ${free.length} joint(s) under the line</b><span>${free.length ? free.map(g => esc(g.joint)).join(' · ') : 'Pass closer to the pipe.'}${left.length ? ` · <b class="pgwarn2">⚠ ${left.length} shop to weld</b>` : ''}${taken.length ? ` · ${taken.length} already in a piece` : ''}</span></div>
+      <button class="btn ghost pgx" data-a="pgclear" aria-label="Clear">✕</button></div>
+    <div class="pgcbtns"><button class="btn ghost" data-a="pghlundo">↶ Erase line</button><button class="btn" data-a="pghlship" ${free.length ? '' : 'disabled'} style="background:${PG_STG.SHIP.color};border-color:${PG_STG.SHIP.color};color:#fff">🚚 Ship this section</button></div></div>`;
+}
+/* the section becomes a piece (P1, P2…) of the ISO and leaves today; the rest of the ISO stays in shop */
+function pgPzApply(p, z) {
+  if (p.items.some(i => i.id === `S|${z.iso}|${z.name}`)) return;
+  const set = new Set(z.joints || []);
+  p.items.filter(i => i.iso === z.iso && (i.kind === 'JOINT' || i.kind === 'TORQUE')).forEach(i => { const nm = i.kind === 'JOINT' ? i.joint : i.tag;
+    if (set.has(nm) && pgFreeJoint(p, i)) i.spool = z.name; else if (/^\d+$/.test(i.spool || '')) i.spool = i.kind === 'JOINT' && i.loc === 'SHOP' ? 'REST' : ''; });
+  p.items.push({ id: `S|${z.iso}|${z.name}`, kind: 'SPOOL', iso: z.iso, spool: z.name, cp: '01' });
+  const restN = p.items.some(i => i.iso === z.iso && i.spool === 'REST'), base = p.items.find(i => i.kind === 'SPOOL' && i.iso === z.iso && /^\d+$/.test(i.spool));
+  if (base) { if (restN && !p.items.some(i => i.id === `S|${z.iso}|REST`)) { base.id = `S|${z.iso}|REST`; base.spool = 'REST'; } else p.items.splice(p.items.indexOf(base), 1); }
+  else if (restN && !p.items.some(i => i.id === `S|${z.iso}|REST`)) p.items.push({ id: `S|${z.iso}|REST`, kind: 'SPOOL', iso: z.iso, spool: 'REST', cp: '01' });
+  if (!restN) { const r = p.items.find(i => i.id === `S|${z.iso}|REST`); if (r) p.items.splice(p.items.indexOf(r), 1); }
+  if ((z.lines || []).length) { if (!p.pzl) p.pzl = {}; if (!p.pzl[z.iso]) p.pzl[z.iso] = {}; p.pzl[z.iso][z.name] = z.lines; }
+}
+function pgPzAll(p) { (PG.S && PG.S.pz || []).filter(z => z.pid === p.id).forEach(z => pgPzApply(p, z)); }
+async function pgShipSection(p) {
+  const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean).filter(g => pgFreeJoint(p, g.items[0]));
+  if (!G.length) return;
+  if (!S.sup && typeof askName === 'function' && !await askName(false)) return;
+  const iso = PG.ui.isoV, used = new Set(p.items.filter(i => i.kind === 'SPOOL' && i.iso === iso).map(i => i.spool));
+  let k = 1; while (used.has('P' + k)) k++; const name = 'P' + k;
+  const left = G.filter(g => g.loc === 'SHOP' && !pgM(p, g.items[0]).WEL), date = PG.ui.date || todayStr();
+  const r = await new Promise(res => {
+    const m = UI.modal(`<h3>🚚 Ship section · ${esc(iso)}</h3>
+      <div class="pgsml"><div class="pgsm"><div><b>New piece</b></div><b>${name}</b></div><div class="pgsm"><div><b>Joints</b><span>${G.map(g => esc(g.joint)).join(' · ')}</span></div><b>${G.length}</b></div><div class="pgsm"><div><b>Date</b></div><b>${fmtDate(date)}</b></div></div>
+      ${left.length ? `<p class="msub" style="margin-top:8px;color:#C24E00"><b>⚠ ${left.length} shop joint(s) still to weld: ${left.map(g => esc(g.joint)).join(', ')}.</b> It leaves incomplete; write why.</p><input class="inp" id="ssWhy" placeholder="e.g. urgent erection" style="font-size:16px">` : ''}
+      <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn" data-x="ok">Ship</button><button class="btn primary" data-x="dn">Ship + note</button></div>`, { locked: true });
+    m.addEventListener('click', e => { const b = e.target.closest('[data-x]'); if (!b) return; if (b.dataset.x === 'no') { UI.close(); res(null); return; }
+      const why = left.length ? m.querySelector('#ssWhy').value.trim() : ''; if (left.length && !why) { UI.toast('Write the reason.', 'err'); return; } UI.close(); res({ why, dn: b.dataset.x === 'dn' }); });
+  });
+  if (!r) return;
+  const z = { uid: uid(), pid: p.id, iso, name, joints: G.map(g => g.joint), lines: PG.ui.hl || [], date, by: S.sup || '', at: new Date().toISOString(), sent: false };
+  PG.S.pz.push(z); pgPzApply(p, z);
+  const id = `S|${iso}|${name}`;
+  PG.S.marks.push(Object.assign({ uid: uid(), batch: uid(), at: new Date().toISOString(), pid: p.id, item: id, stage: 'SHIP', act: 'SET', date, by: S.sup || '', crew: '', sent: false }, left.length ? { force: true, note: r.why } : {}));
+  PG.cache = null; PG.ui.hl = []; PG.ui.sel = new Set(); PG.ui.mode = 'tap'; await pgSave(); render();
+  UI.toast(`${name} shipped · ${G.length} joint(s).`, 'ok');
+  if (r.dn) pgDnForm(p, [id]);
 }
 /* an ISO made of pieces (P1, P2…): each joint is in one piece; the color says the day its piece was shipped */
 const PG_PZCOL = ['#F2C200', '#E0479E', '#4FC3F7', '#8E5CD9', '#FF6A00', '#2E9D5B'];
@@ -2886,7 +2999,7 @@ function pgPzInfo(p, iso) {
   const dc = dd => PG_PZCOL[days.indexOf(dd) % PG_PZCOL.length];
   return { n: SP.length, days, dc, col: it => { const sp = it.spool && pgSpoolOf(p, it), sh = sp && pgM(p, sp).SHIP; return sh ? dc(sh.date) : ''; } };
 }
-const PG_MODE_ISO = { tap: 'Mode: Tap · touch a joint', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the drawing' };
+const PG_MODE_ISO = { tap: 'Mode: Tap · touch a joint', box: 'Mode: Box · drag a box', pan: 'Mode: Move · drag the drawing', hl: 'Ship a section · pass your finger over the pipe' };
 function pgIsoList(p) {        /* no drawing: the joint list alone */
   const G = pgIsoJoints(p, PG.ui.isoV), L = pgIsoListHtml(p), ea = new Set(G.flatMap(g => g.items.map(i => i.spool))).size;
   return `<div class="pgisoh"><button class="pgpj" data-a="pgisos">⇆ ISOs</button><div class="pgmt"><b>${esc(PG.ui.isoV)}</b><span>${ea} spool${ea === 1 ? '' : 's'} · no drawing</span></div></div>
@@ -2896,6 +3009,7 @@ function pgIsoList(p) {        /* no drawing: the joint list alone */
 const PG_FWD = [['FIT', 'Fit-up ✓'], ['WEL', 'Weld ✓'], ['PNT', 'Painted ✓'], ['TRQ', 'Torque ✓'], ['REP', 'Repair']];
 const PG_BK = [['B_PNT', '← No paint'], ['B_FIT', '← Fit-up'], ['B_PEN', '← Pending']];
 function pgIsoBar(p) {
+  if (PG.ui.mode === 'hl' && pgIsoMode(p)) return pgHlBar(p);
   const G = Array.from(PG.ui.sel).map(k => pgIsoGroup(p, k)).filter(Boolean), one = G.length === 1 ? G[0] : null;
   const fwd = PG_FWD.filter(([s]) => s !== 'PNT' || pgPaintJ(p)).map(([s, l]) => [s, l, G.reduce((a, g) => a + pgAvail(p, g, s).length, 0)]).filter(x => x[2]);
   const bk = PG_BK.filter(([k]) => k !== 'B_PNT' || pgPaintJ(p)).map(([k, l]) => [k, l, G.reduce((a, g) => a + (g.kind === 'TORQUE' && k !== 'B_PEN' ? 0 : pgBackList(p, g, k).length), 0)]).filter(x => x[2]);
@@ -3161,7 +3275,7 @@ function pgDnSign(p, dn) {
 }
 async function pgDnShare(p, dn) {
   try {
-    const doc = dnPdf(p, dn, { getM: it => pgM(p, it), dwx: iso => (p.dwx || {})['ISO:' + iso] || null });
+    const doc = dnPdf(p, dn, { getM: it => pgM(p, it), dwx: iso => (p.dwx || {})['ISO:' + iso] || null, bands: (iso, sps) => pgBands(p, iso).filter(b => sps.includes(b.nm)) });
     const fname = `${dn.no}.pdf`, how = await shareOrDownload(doc.output('blob'), fname, `Delivery note ${dn.no}`);
     if (how !== 'cancelled') UI.toast(how === 'shared' ? 'Delivery note shared.' : `Saved: ${fname}`, 'ok');
   } catch (e) { UI.alert('Delivery note', 'The PDF could not be made.\n' + (e.message || e)); }
@@ -3185,11 +3299,13 @@ function pgDnList(p) {
 function pgDnVoid(p, d) {
   const m = UI.modal(`<h3>🚫 Void ${esc(d.no)}?</h3><p class="msub">The note stays in the list crossed out (the Admin sees it). Its ${d.spools.length} spool(s) stay shipped and go back to “No note”.</p>
     <div class="field"><label>Reason (required)</label><input class="inp" id="dvWhy" placeholder="e.g. wrong spools" style="font-size:16px"></div>
+    <label class="pgchk"><input type="checkbox" id="dvBack"> They did not leave: take back the shipping (back to shop)</label>
     <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn pgvb2" data-x="ok">Void</button></div>`, { locked: true });
   m.querySelector('[data-x=no]').onclick = () => { UI.close(); pgDnList(p); };
   m.querySelector('[data-x=ok]').onclick = async () => {
     const why = m.querySelector('#dvWhy').value.trim(); if (!why) { UI.toast('Write the reason.', 'err'); return; }
     d.void = { date: PG.ui.date || todayStr(), by: S.sup || '', why, at: new Date().toISOString() }; d.sent = false;
+    if (m.querySelector('#dvBack').checked) pgBack(p, d.spools || [], '');
     await pgSave(); UI.close(); render(); UI.toast(`${d.no} void.`, 'ok');
   };
 }
@@ -3355,6 +3471,14 @@ function dnPdf(p, dn, ctx) {
     if (d && d.img) {
       const k = Math.min((bw - 4) / d.w, (bh - 4) / d.h), iw = d.w * k, ih = d.h * k, ix = bx + (bw - iw) / 2, iy = by + (bh - ih) / 2;
       try { doc.addImage(d.img, dnImgFmt(d.img), ix, iy, iw, ih); } catch (e) { /* drawing could not be drawn */ }
+      /* the highlighted sections of this note, in the color of their day */
+      (ctx.bands ? ctx.bands(iso, mine.map(r => r.sp.spool)) : []).forEach(b => {
+        try { doc.saveGraphicsState(); doc.setGState(new doc.GState({ opacity: b.op })); } catch (e) { /* no transparency */ }
+        doc.setDrawColor(b.col); doc.setLineWidth(Math.max(1.2, iw / 70)); doc.setLineCap('round'); doc.setLineJoin('round');
+        for (let i = 1; i < b.pts.length; i++) doc.line(ix + b.pts[i - 1][0] * iw, iy + b.pts[i - 1][1] * ih, ix + b.pts[i][0] * iw, iy + b.pts[i][1] * ih);
+        try { doc.restoreGraphicsState(); } catch (e) { /* nothing */ }
+      });
+      doc.setLineCap('butt');
       const r0 = Math.max(1.6, d.w / 80 * (d.bs || 1) * k);
       Object.entries(d.mk || {}).forEach(([j, xy]) => {
         const s = st(j); if (!s) return;
