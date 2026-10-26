@@ -579,6 +579,21 @@ textarea.inp{padding:10px 12px;min-height:80px;resize:vertical}
 .pgsecb{background:#FFF4EC;border-color:#FF6A00;color:#C24E00}
 
 .pgver{font-size:12px;font-weight:800;color:#6B6790;margin-top:4px}
+/* IFR: the activity of today on top of the roof (one pill, a touch opens the list) */
+.pgifrp{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;border:none;color:#fff;border-radius:16px;min-height:44px;padding:0 18px;font-weight:800;font-size:16px;box-shadow:0 3px 10px rgba(28,11,91,.25);white-space:nowrap}
+.pgifrp span{font-size:12px;margin-left:4px;opacity:.85}
+.pgifrm{position:absolute;top:58px;left:50%;transform:translateX(-50%);z-index:7;background:#fff;border:1.5px solid #C9C6DB;border-radius:16px;padding:6px;display:flex;flex-direction:column;gap:4px;box-shadow:0 6px 18px rgba(28,11,91,.22);min-width:220px}
+.pgifrm button{display:flex;align-items:center;gap:10px;border:none;background:#fff;border-radius:12px;min-height:44px;padding:0 12px;font-weight:800;font-size:15px;color:var(--q);text-align:left}
+.pgifrm button.on{background:#F1EFF8}
+.pgifrm i{width:14px;height:14px;border-radius:4px;flex:none}
+.pgmode.pgmode2{top:58px;font-size:11px;padding:4px 10px}
+.pgifrs{position:absolute;top:58px;left:50%;transform:translateX(-50%);z-index:5;border:1.5px solid #C9C6DB;background:#fff;color:var(--q);border-radius:14px;min-height:42px;padding:0 14px;font-weight:800;font-size:15px;box-shadow:0 3px 10px rgba(28,11,91,.15);white-space:nowrap}
+.pgifrs small{font-weight:600;color:var(--muted);margin-left:6px;font-size:12px}
+.pgifrr{display:flex;align-items:center;gap:6px;font-weight:700;color:var(--muted)}
+.pgifrr .inp{width:76px;min-height:46px;font-size:18px;text-align:center}
+.pgifrr .btn{min-height:46px}
+.pgifrt .pgstp{margin:0}
+@media (orientation:landscape) and (max-height:560px){ .pgifrp{min-height:38px;font-size:14px} .pgmode.pgmode2,.pgifrs{top:52px} .pgifrs{min-height:38px;font-size:14px} .pgifrm{top:50px} }
 </style></head>
 <body><div id="root"></div>
 <script>/** @license
@@ -997,7 +1012,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
    ===================================================================== */
 'use strict';
 
-const APP_VERSION = '3.0.0';
+const APP_VERSION = '3.1.0';
 /* spool name for people: 01 -> SP01 · a piece of an ISO (P1, 01-P2) keeps its name */
 const spLbl = s => !s ? '' : String(s).replace(/(^|-)REST$/, '$1Rest').replace(/^(\d+)$/, 'SP$1').replace(/^(\d+-)/, 'SP$1');
 /* highlighter of a section of an ISO: the finger line becomes straight runs in the directions of the drawing (every 15°: 0°, 30°, 90°…) */
@@ -2037,12 +2052,13 @@ const pgProj = id => pgProjects().find(p => p.id === id);
 const pgCur = () => { const p = pgProj(PG.ui.pid); return p && !p.locked ? p : null; };
 const pgRep = p => p.type === 'REPAIR';
 const pgDome = p => p.type === 'DOME';
-const pgIsMap = p => pgRep(p) || pgDome(p);
+const pgIfr = p => p.type === 'IFR';
+const pgIsMap = p => pgRep(p) || pgDome(p) || pgIfr(p);
 const pgPending = () => PG.S ? PG.S.marks.filter(m => !m.sent).length + ['days', 'rolls', 'zev', 'hyd', 'dn', 'shp', 'shpx'].reduce((a, k) => a + (PG.S[k] || []).filter(d => !d.sent).length, 0) : 0;
 /* day log on: what this phone chose, or what the office set in the lists */
 const pgDlOn = p => { const o = PG.S.dl && PG.S.dl[p.id]; if (o && typeof o === 'object') return o.base === !!p.dl ? !!o.on : !!p.dl; return o === undefined ? !!p.dl : !!o; };
 const pgDay = (p, d) => (PG.S.days || []).filter(x => x.pid === p.id && x.date === d).sort((a, b) => String(a.at).localeCompare(String(b.at))).pop();
-const pgLabel = (p, s) => (pgRep(p) ? PG_STG[s].r : PG_STG[s].p);
+const pgLabel = (p, s) => (pgIfr(p) && /^SL\d$/.test(s) ? pgIfrSealName(p, +s.slice(2)) : pgRep(p) ? PG_STG[s].r : PG_STG[s].p);
 const pgF1 = x => (Math.round((x + Number.EPSILON) * 10) / 10).toFixed(1);
 const pgPct = (a, b) => b > 0 ? Math.round(a / b * 1000) / 10 : 0;
 
@@ -2082,9 +2098,9 @@ function pgSpoolInfo(p, sp) {
   const ready = shop.length === sw.length, m = pgM(p, sp);
   return { shop: shop.length, shopW: sw.length, field: fd.length, fieldW: fd.filter(i => pgM(p, i).WEL).length, ready, force: !!(m.SHIP && !ready), left: shop.filter(i => !pgM(p, i).WEL), status: m.INST ? 'Installed' : m.SHIP ? 'Shipped' : pgShips(p, sp).length ? 'Partial' : ready ? 'Ready' : 'In shop' };
 }
-const pgName = it => it.kind === 'JOINT' || it.kind === 'THREAD' ? `${it.spool ? spLbl(it.spool) + ' · ' : ''}${it.joint}` : it.kind === 'TORQUE' ? `${it.spool ? spLbl(it.spool) + ' · ' : ''}${it.tag}` : it.kind === 'SPOOL' ? `Spool ${it.spool}` : it.kind === 'OTHER' ? it.tag : it.id;
-const pgQty = (p, it) => pgRep(p) ? (it.ft || 0) : (it.kind === 'JOINT' || it.kind === 'THREAD') ? (it.nd || 0) : 1;
-const pgUnit = (p, it) => pgRep(p) ? 'ft' : it.kind === 'STRIP' ? 'strips' : it.kind === 'NODE' ? 'nodes' : (it.kind === 'JOINT' || it.kind === 'THREAD') ? 'in-dia' : it.kind === 'SPOOL' ? 'spools' : 'pcs';
+const pgName = it => it.kind === 'PANEL' ? (it.tag ? `${it.id} (${it.tag})` : it.id) : ifrIsSeal(it) ? `${it.a}°` : it.kind === 'JOINT' || it.kind === 'THREAD' ? `${it.spool ? spLbl(it.spool) + ' · ' : ''}${it.joint}` : it.kind === 'TORQUE' ? `${it.spool ? spLbl(it.spool) + ' · ' : ''}${it.tag}` : it.kind === 'SPOOL' ? `Spool ${it.spool}` : it.kind === 'OTHER' ? it.tag : it.id;
+const pgQty = (p, it, s) => pgIfr(p) ? pgIfrQty(p, it, s) : pgRep(p) ? (it.ft || 0) : (it.kind === 'JOINT' || it.kind === 'THREAD') ? (it.nd || 0) : 1;
+const pgUnit = (p, it, s) => pgIfr(p) ? pgIfrUnit(p, it, s) : pgRep(p) ? 'ft' : it.kind === 'STRIP' ? 'strips' : it.kind === 'NODE' ? 'nodes' : (it.kind === 'JOINT' || it.kind === 'THREAD') ? 'in-dia' : it.kind === 'SPOOL' ? 'spools' : 'pcs';
 
 /* ---------------- marking ---------------- */
 function pgMark(p, ids, stage) {
@@ -2171,7 +2187,7 @@ function pgSendSummary(nHH) {
       const c = {}; mk.forEach(m => { const k = m.act === 'CLR' ? 'Back to pending' : pgLabel(p, m.stage); c[k] = (c[k] || 0) + 1; });
       if (dy.length) c['Day log'] = dy.length; if (rl.length) c['Rolls'] = rl.length;
       if (zv.length) c['Supports'] = zv.reduce((a, e) => a + (Number(e.n) || 0), 0); if (hy.length) c['Hydro tests'] = hy.length; if (dn.length) c['Delivery notes'] = dn.length; if (pz.length) c['Shipments'] = pz.length;
-      return `<div class="pgsm"><div><b>${pgDome(p) ? 'Dome' : pgRep(p) ? 'Tank' : 'Piping'} · ${esc(p.name)}</b><span>${Object.keys(c).map(esc).join(' · ')}</span></div><b>${Object.values(c).join(' · ')}</b></div>`; }).join('');
+      return `<div class="pgsm"><div><b>${pgDome(p) ? 'Dome' : pgIfr(p) ? 'IFR' : pgRep(p) ? 'Tank' : 'Piping'} · ${esc(p.name)}</b><span>${Object.keys(c).map(esc).join(' · ')}</span></div><b>${Object.values(c).join(' · ')}</b></div>`; }).join('');
     const tot = pgPending() + (nHH || 0);
     const m = UI.modal(`<h3>${icon('send')} Send to Admin</h3><p class="msub">What you send · ${fmtDate(todayStr())}</p>
       <div class="pgsml">${rows}${nHH ? `<div class="pgsm"><div><b>Man-hours</b><span>Crew records</span></div><b>${nHH}</b></div>` : ''}</div>
@@ -2207,6 +2223,7 @@ function pgTop() {
 }
 /* the one number of a project (same as the office) */
 function pgHeadline(p) {
+  if (pgIfr(p)) return pgIfrHeadline(p);
   if (pgDome(p)) { const S0 = p.items.filter(i => i.kind === 'STRIP'), d = S0.filter(i => pgM(p, i).PLS).length; return { pct: pgPct(d, S0.length), txt: `${d} / ${S0.length} strips`, col: PG_STG.PLS.color }; }
   if (pgRep(p)) { const t = p.items.reduce((a, i) => a + (i.ft || 0), 0), d = p.items.filter(i => pgM(p, i).WEL).reduce((a, i) => a + (i.ft || 0), 0); return { pct: pgPct(d, t), txt: `welded ${Math.round(d).toLocaleString('en-US')} / ${Math.round(t).toLocaleString('en-US')} ft`, col: PG_STG.WEL.color }; }
   const J = p.items.filter(i => i.kind === 'JOINT'), t = J.reduce((a, i) => a + (i.nd || 0), 0);
@@ -2215,7 +2232,7 @@ function pgHeadline(p) {
   return { pct: wp !== null ? wp : t ? Math.round((0.4 * f + 0.6 * w) / t * 1000) / 10 : 0, txt: `${wp !== null ? 'weighted · ' : ''}welded ${pgF1(w)} / ${pgF1(t)} in-dia`, col: PG_STG.WEL.color };
 }
 const pgUnsent = p => PG.S.marks.filter(m => !m.sent && m.pid === p.id).length + ['days', 'rolls', 'zev', 'hyd'].reduce((a, k) => a + (PG.S[k] || []).filter(d => !d.sent && d.pid === p.id).length, 0);
-const pgKind = p => pgDome(p) ? 'DOME ROOF' : pgRep(p) ? 'TANK REPAIR' : 'PIPING';
+const pgKind = p => pgIfr(p) ? 'IFR ROOF' : pgDome(p) ? 'DOME ROOF' : pgRep(p) ? 'TANK REPAIR' : 'PIPING';
 const pgWo = p => { const w = String(p.wo || '').trim().replace(/^W\.?O\.?[\s#:.-]*/i, '').trim(); return w ? 'WO ' + w : ''; };
 function pgFoot() {
   const nP = pgPending() + pending();
@@ -2256,10 +2273,10 @@ function pgRender(root) {
   if (pgIsMap(p)) {     /* map: whole screen, best with the phone turned */
     root.innerHTML = `<div class="app pgapp pgmapmode">
       <div class="pgmtop"><div class="logo"><img src="${LOGO_QSL}" alt="QSL"></div><button class="pgpj" data-a="pgprojects">⇆ Projects</button>
-        <div class="pgmt"><b>${pgDome(p) ? 'Dome' : 'Tank'} · ${esc(p.name)}</b><span>${h.pct.toFixed(1)}% · ${esc(h.txt)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
+        <div class="pgmt"><b>${pgDome(p) ? 'Dome' : pgIfr(p) ? 'IFR' : 'Tank'} · ${esc(p.name)}</b><span>${h.pct.toFixed(1)}% · ${esc(h.txt)}</span></div>${pgDateChip()}<img class="ep" src="${LOGO_EP}" alt="EP"></div>
       <div class="pgstage"><div class="pgmap" id="pgmapbox">${pgMapSvg(p)}</div>
         <div class="pgfabs l">${[['tap', 'Tap'], ['box', 'Box'], ['pan', 'Move']].map(([k, l]) => `<button class="pgmfab ${PG.ui.mode === k ? 'on' : ''}" data-pgm="${k}">${PG_ICON[k]}<span>${l}</span></button>`).join('')}</div>
-        <div class="pgmode" id="pgmode">${PG_MODE[PG.ui.mode] || ''}</div>
+        ${pgIfr(p) ? pgIfrChips(p) + pgIfrSub(p) : ''}${pgIfr(p) && (pgIfrA(p) === 'TRF' || /^SL/.test(pgIfrA(p))) ? '' : `<div class="pgmode ${pgIfr(p) ? 'pgmode2' : ''}" id="pgmode">${PG_MODE[PG.ui.mode] || ''}</div>`}
         <div class="pgfabs r"><button class="pgfab" data-a="pgzin" aria-label="Zoom in">+</button><button class="pgfab" data-a="pgzout" aria-label="Zoom out">−</button><button class="pgfab sm" data-a="pgzall">All</button><button class="pgfab" data-a="pgfind" aria-label="Find">${icon('search')}</button><button class="pgfab ${PG.ui.leg ? 'on' : ''}" data-a="pgleg" aria-label="Legend">?</button></div>
         ${PG.ui.leg ? `<div class="pglegend pgpop">${pgLegend(p)}</div>` : ''}
         <div class="pgbl">${pgDome(p) ? '<button class="pgblb" data-a="pgrolls">🧻 Rolls</button>' : ''}${pgDlBtn(p)}</div>
@@ -2287,7 +2304,7 @@ const PG_MODE = { tap: 'Mode: Tap · touch a strip or node', box: 'Mode: Box · 
 function pgDlBtn(p) {
   if (!pgDlOn(p)) return '<button class="pgblb off" data-a="pgdl">📋 Day log off</button>';
   const d = pgDay(p, PG.ui.date || todayStr());
-  return `<button class="pgblb ${d ? '' : 'warn'}" data-a="pgdl">📋 ${d ? `${d.fit} fitters · ${d.wel} welders · ${d.h} h` : 'Day log'}</button>`;
+  return `<button class="pgblb ${d ? '' : 'warn'}" data-a="pgdl">📋 ${d ? (pgIfr(p) ? `${d.fit} men · ${d.h} h` : `${d.fit} fitters · ${d.wel} welders · ${d.h} h`) : 'Day log'}</button>`;
 }
 /* piping: one thin line under the name (only the icon when the day log is off) */
 function pgDlLine(p) {
@@ -2296,6 +2313,7 @@ function pgDlLine(p) {
   return `<div class="pgdll"><button data-a="pgdl" class="${d ? '' : 'warn'}">📋 ${d ? `Today: <b>${d.fit} fitters · ${d.wel} welders · ${d.h} h</b>` : '<b>Day log: write the crew of today</b>'}<span>Edit</span></button></div>`;
 }
 function pgLegend(p) {
+  if (pgIfr(p)) return pgIfrLegend(p);
   if (pgDome(p)) return `<span><i style="background:${PG_DPEND}"></i>Strip</span><span><i style="background:${PG_STG.PLS.color}"></i>Strip placed</span><span><i style="background:#fff;border:2px solid #8C86B8;border-radius:50%"></i>Node</span><span><i style="background:${PG_STG.PLN.color};border-radius:50%"></i>Node placed</span><span><i style="background:${PG_DREF}"></i>Reference</span><span><i style="background:${PG_SEL}"></i>Selected</span>`;
   return `<span><i style="background:${PG_PEND}"></i>Pending</span>${['GOU', 'FIT', 'WEL', 'TST'].map(s => `<span><i style="background:${PG_STG[s].color}"></i>${PG_STG[s].r}</span>`).join('')}<span><i style="background:${PG_SEL}"></i>Selected</span>`;
 }
@@ -2309,6 +2327,7 @@ function pgBar(p) {
     if (['SPOOLS', 'TRQ', 'OTHER'].includes(PG.ui.act)) return pgItemBar(p);
     return '<div class="pgsheet" id="pgbar"></div>';
   }
+  if (pgIfr(p)) return pgIfrBar(p);
   const items = pgSelItems(p);
   const qty = {}; items.forEach(it => { const u = pgUnit(p, it); qty[u] = (qty[u] || 0) + pgQty(p, it); });
   const all = pgRep(p) ? ['GOU', 'FIT', 'WEL', 'TST'] : pgDome(p) ? ['PLS', 'PLN'] : PG.ui.tab === 'spools' ? ['SHIP', 'INST'] : PG.ui.tab === 'torque' ? ['TRQ'] : PG.ui.tab === 'other' ? ['INS'] : ['FIT', 'WEL'];
@@ -2329,7 +2348,8 @@ function pgRefresh() {
   const p = pgCur(); if (!p) return;
   const b = document.getElementById('pgbar');
   if (b) { const t = document.createElement('div'); t.innerHTML = pgBar(p); b.replaceWith(t.firstElementChild); }
-  if (pgDome(p)) {
+  if (pgIfr(p)) pgRedraw(p);
+  else if (pgDome(p)) {
     document.querySelectorAll('[data-sv]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.sv); if (!it) return; const s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLS; el.setAttribute('stroke', s ? PG_SEL : dn ? PG_STG.PLS.color : PG_DPEND); el.setAttribute('stroke-width', el.dataset.w * (s ? 4.2 : dn ? 3.4 : 2)); });
     document.querySelectorAll('circle[data-pc]').forEach(el => { const it = p.items.find(i => i.id === el.dataset.pc); if (!it) return; const s = PG.ui.sel.has(it.id), dn = !!pgM(p, it).PLN; el.setAttribute('fill', s ? PG_SEL : dn ? PG_STG.PLN.color : '#FFFFFF'); el.setAttribute('stroke', s ? PG_SEL : dn ? PG_STG.PLN.color : '#8C86B8'); });
   } else if (pgIsoMode(p)) pgIsoRedraw(p);
@@ -2341,6 +2361,7 @@ function pgRefresh() {
 
 /* ----- tank map ----- */
 function pgBox(p) { const d = pgIsoMode(p) && pgDwx(p); if (d) { const pd = Math.max(d.w, d.h) * 0.02; return [-pd, -pd, d.w + 2 * pd, d.h + 2 * pd]; }
+  if (pgIfr(p) && p.geo) return ifrBoxR(p);
   const R = (p.geo && (p.geo.R || p.geo.D / 2)) || 100, pad = R * 0.03; return [-R - pad, -R - pad, 2 * (R + pad), 2 * (R + pad)]; }
 function pgDomeSvg(p, vb) {
   const g = p.geo, R = g.D / 2, sw = Math.max(vb[2], vb[3]) / 600, nr = Math.max(R / 110, sw * 3);
@@ -2364,6 +2385,7 @@ function pgDomeSvg(p, vb) {
 function pgMapSvg(p) {
   if (pgIsoMode(p)) return pgIsoSvg(p);
   if (pgDome(p)) return pgDomeSvg(p, PG.ui.vb[p.id] || pgBox(p));
+  if (pgIfr(p)) return pgIfrSvg(p, PG.ui.vb[p.id] || pgBox(p));
   const g = p.geo || { lines: [], D: 200 }, R = g.D / 2, vb = PG.ui.vb[p.id] || pgBox(p), sw = Math.max(vb[2], vb[3]) / 600;
   const out = [`<svg xmlns="http://www.w3.org/2000/svg" id="pgmap" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">`, `<circle cx="0" cy="0" r="${R}" fill="#fff" stroke="#1C0B5B" stroke-width="${sw * 2.2}"/>`];
   (g.lines || []).forEach(l => out.push(`<line x1="${l[0]}" y1="${-l[1]}" x2="${l[2]}" y2="${-l[3]}" stroke="#B9B5CF" stroke-width="${sw * 0.7}"/>`));
@@ -2397,6 +2419,7 @@ function pgPick(p, svg, cx, cy, target) {
     Object.entries(d.mk || {}).forEach(([j, xy]) => { const g = G.get(j); if (!g) return; const dd = Math.hypot(xy[0] * d.w - q.x, xy[1] * d.h - q.y); if (dd < bd) { bd = dd; best = g.key; } });
     return bd <= Math.max(R * 1.3, tol) ? best : '';
   }
+  if (pgIfr(p)) return pgIfrPick(p, x, y, tol);
   if (pgDome(p)) {
     let nb = '', nd = Infinity, sb = '', sd = Infinity;
     p.items.forEach(it => { if (it.kind === 'NODE') { const d = Math.hypot(it.pts[0][0] - x, it.pts[0][1] - y); if (d < nd) { nd = d; nb = it.id; } }
@@ -2469,7 +2492,8 @@ function pgWireMap() {
       rect.remove(); rect = null;
       if (pgIsoMode(p)) { const d = pgDwx(p), G = new Map(pgIsoJoints(p, PG.ui.isoV).map(g => [g.joint, g]));
         Object.entries(d.mk || {}).forEach(([j, xy]) => { const g = G.get(j), x = xy[0] * d.w, y = xy[1] * d.h; if (g && x >= x0 && x <= x1 && y >= y0 && y <= y1) PG.ui.sel.add(g.key); }); pgRefresh(); return; }
-      p.items.forEach(it => { if (!it.pts) return; const cx = it.pts.reduce((a, c) => a + c[0], 0) / it.pts.length, cy = -it.pts.reduce((a, c) => a + c[1], 0) / it.pts.length; if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) PG.ui.sel.add(it.id); });
+      if (pgIfr(p)) pgIfrBox(p, x0, y0, x1, y1);
+      else p.items.forEach(it => { if (!it.pts) return; const cx = it.pts.reduce((a, c) => a + c[0], 0) / it.pts.length, cy = -it.pts.reduce((a, c) => a + c[1], 0) / it.pts.length; if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) PG.ui.sel.add(it.id); });
       pgRefresh(); return;
     }
     later();
@@ -2540,6 +2564,7 @@ async function pgClick(e) {
   if (d.pgp) { PG.ui.pid = d.pgp; PG.ui.act = ''; PG.ui.isoV = ''; PG.ui.sel = new Set(); PG.ui.iso = 'ALL'; PG.ui.spool = 'ALL'; PG.ui.q = ''; PG.ui.done = false; PG.ui.leg = false; render(); return; }
   if (d.pgt) { PG.ui.tab = d.pgt; PG.ui.sel = new Set(); PG.ui.stf = 'ALL'; PG.ui.spool = 'ALL'; render(); return; }
   if (d.pgjm) { PG.ui.jm = d.pgjm; PG.ui.sel = new Set(); render(); return; }
+  if (d.ia && p) { PG.ui.ia = d.ia; PG.ui.iam = false; PG.ui.sel = new Set(); render(); return; }
   if (d.pgr) { if (PG.ui.sel.has(d.pgr)) PG.ui.sel.delete(d.pgr); else PG.ui.sel.add(d.pgr); pgRefresh(); return; }
   if (d.pgm) { if (d.pgm !== 'hl' && !PG.ui.q && PG.ui.hl && PG.ui.hl.length) { PG.ui.hl = []; PG.ui.sel = new Set(); pgRefresh(); } PG.ui.mode = d.pgm; document.querySelectorAll('[data-pgm]').forEach(x => { x.classList.toggle('sel', x === b); x.classList.toggle('on', x === b); }); const mb = document.getElementById('pgmode'); if (mb) mb.textContent = (pgIsoMode(p) ? PG_MODE_ISO : PG_MODE)[d.pgm] || ''; return; }
   if (d.pgmark && (pgIsoMode(p) || PG.ui.act === 'JNT')) { pgIsoMark(p, d.pgmark); return; }
@@ -2572,6 +2597,9 @@ async function pgClick(e) {
     case 'pgjl': PG.ui.jl = !PG.ui.jl; render(); break;
     case 'pgisos': if (PG.ui.q) { pgTruckEnd(p); break; } PG.ui.isoV = ''; PG.ui.perSpool = false; PG.ui.sel = new Set(); render(); break;
     case 'pgzsave': pgZoneSave(p); break;
+    case 'pgifrtrfm': pgIfrTrfModal(p); break;
+    case 'pgifrmenu': PG.ui.iam = !PG.ui.iam; render(); break;
+    case 'pgifrrngm': pgIfrRangeModal(p); break;
     case 'pghydsave': pgHydSave(p); break;
     case 'pgsettings': pgSettings(); break;
     case 'pgleg': PG.ui.leg = !PG.ui.leg; render(); break;
@@ -2595,7 +2623,7 @@ async function pgClick(e) {
     }
     case 'pgbacksel': {
       const items = pgSelItems(p).filter(it => pgDone(p, it) >= 0 || pgM(p, it).PNT);
-      const order = ['GOU', 'FIT', 'WEL', 'TST', 'DONE', 'SHIP', 'INST', 'TRQ', 'INS', 'PLS', 'PLN'];
+      const order = ['GOU', 'FIT', 'WEL', 'TST', 'DONE', 'SHIP', 'INST', 'TRQ', 'INS', 'PLS', 'PLN', 'TRF', 'PNL', 'SIL', 'SL1', 'SL2', 'SL3'];
       const st = Array.from(new Set(items.flatMap(it => pgStages(it)))).sort((a, c) => order.indexOf(a) - order.indexOf(c));
       const opts = [['', 'Pending (remove all marks)']].concat(st.slice(0, -1).map(s => [s, `Keep up to ${pgLabel(p, s)}`]));
       if (pgSelItems(p).some(it => pgM(p, it).PNT)) opts.unshift(['-PNT', 'Remove paint only']);
@@ -2631,7 +2659,7 @@ function pgDayModal(p) {
   const hh = () => { const f = Number(m.querySelector('#dlF').value) || 0, w = Number(m.querySelector('#dlW').value) || 0, h = Number(m.querySelector('#dlH').value) || 0; return `Man-hours: <b>${Math.round((f + w) * h * 10) / 10} h</b> (${f + w} people × ${h} h)`; };
   const m = UI.modal(`<div class="pgdlh"><h3>📋 Day log · ${esc(p.name)}</h3><button class="pgsw ${on ? 'on' : ''}" id="dlOn" aria-label="Day log on or off"><i></i></button></div>
     <p class="msub">${on ? `${fmtDate(date)} · one record per day, you can correct it` : 'Off: only progress is marked. Turn it on to write the crew of each day' + (pgDome(p) ? ' and the rolls.' : '.')}</p>
-    ${on ? `<div class="pgstps">${pgStepper('dlF', 'Fitters', 'people today', d.fit ?? 0, 200)}${pgStepper('dlW', 'Welders', '0 if not needed', d.wel ?? 0, 200)}${pgStepper('dlH', 'Hours', 'of the day', d.h ?? (DAY_H[parseLocal(date).getDay()] || 10), 24, 0.5)}</div>
+    ${on ? `<div class="pgstps">${pgStepper('dlF', pgIfr(p) ? 'Men' : 'Fitters', 'people today', d.fit ?? 0, 200)}${pgIfr(p) ? `<input type="hidden" id="dlW" value="${d.wel ?? 0}">` : pgStepper('dlW', 'Welders', '0 if not needed', d.wel ?? 0, 200)}${pgStepper('dlH', 'Hours', 'of the day', d.h ?? (DAY_H[parseLocal(date).getDay()] || 10), 24, 0.5)}</div>
       <p class="msub" id="dlHH" style="margin-top:8px"></p>` : ''}
     <div class="mbtns"><button class="btn ghost" data-x="no">${on ? 'Cancel' : 'Close'}</button>${on ? '<button class="btn primary" data-x="ok">Save</button>' : ''}</div>`);
   pgWireSteppers(m);
@@ -2644,7 +2672,7 @@ function pgDayModal(p) {
     if (![f, w, h].every(x => isFinite(x) && x >= 0) || h > 24 || f !== Math.round(f) || w !== Math.round(w)) { UI.toast('Check the numbers (people: whole numbers, hours 0 to 24).', 'err'); return; }
     PG.S.days = PG.S.days.filter(x => !(x.pid === p.id && x.date === date && !x.sent));      /* the last one of the day stays */
     PG.S.days.push({ uid: uid(), pid: p.id, date, fit: f, wel: w, h, by: S.sup || '', at: new Date().toISOString(), sent: false });
-    await pgSave(); UI.close(); render(); UI.toast(`Day log saved: ${f} fitters · ${w} welders · ${h} h.`, 'ok');
+    await pgSave(); UI.close(); render(); UI.toast(pgIfr(p) ? `Day log saved: ${f} men · ${h} h.` : `Day log saved: ${f} fitters · ${w} welders · ${h} h.`, 'ok');
   };
 }
 const DAY_H = [0, 10, 10, 10, 10, 8, 9];
@@ -2675,7 +2703,7 @@ function pgRollsModal(p) {
 }
 /* find a strip / piece on the map: zoom to it and select it */
 function pgFindModal(p) {
-  const m = UI.modal(`<h3>${icon('search')} Find ${pgDome(p) ? 'strip or node' : 'piece'}</h3><div class="field"><input class="inp" id="pgFindIn" placeholder="${pgDome(p) ? 'S045 or N012' : 'P1-045'}" autocapitalize="characters" enterkeyhint="search"></div>
+  const m = UI.modal(`<h3>${icon('search')} Find ${pgDome(p) ? 'strip or node' : pgIfr(p) ? 'panel' : 'piece'}</h3><div class="field"><input class="inp" id="pgFindIn" placeholder="${pgDome(p) ? 'S045 or N012' : pgIfr(p) ? 'P0123 or edge tag 14B' : 'P1-045'}" autocapitalize="characters" enterkeyhint="search"></div>
     <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="ok">Find</button></div>`);
   const go = () => { const v = m.querySelector('#pgFindIn').value; UI.close(); pgFindGo(p, v); };
   m.querySelector('[data-x=no]').onclick = () => UI.close(); m.querySelector('[data-x=ok]').onclick = go;
@@ -2684,10 +2712,11 @@ function pgFindModal(p) {
 }
 function pgFindGo(p, v) {
   const q = String(v || '').trim().toUpperCase(); if (!q) return;
-  const it = p.items.find(i => i.id.toUpperCase() === q) || p.items.find(i => i.id.toUpperCase().includes(q));
+  const it = (pgIfr(p) && p.items.find(i => i.kind === 'PANEL' && String(i.tag).toUpperCase() === q)) || p.items.find(i => i.pts && i.id.toUpperCase() === q) || p.items.find(i => i.pts && i.id.toUpperCase().includes(q));
   if (!it || !it.pts) { UI.toast(pgDome(p) ? 'Strip not found.' : 'Piece not found.', 'err'); return; }
   const xs = it.pts.map(c => c[0]), ys = it.pts.map(c => -c[1]), cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-  const z = pgDome(p) ? Math.max(18, p.geo.D * 0.22) : 44;
+  const z = pgDome(p) ? Math.max(18, p.geo.D * 0.22) : pgIfr(p) ? 40 : 44;
+  if (pgIfr(p) && it.kind === 'PANEL') PG.ui.ia = pgM(p, it).PNL ? 'SIL' : 'PNL';
   PG.ui.vb[p.id] = [cx - z / 2, cy - z / 2, z, z]; PG.ui.sel.add(it.id); render(); UI.toast(`${it.id} selected.`, 'ok');
 }
 function pgKey(e) {
@@ -3656,6 +3685,443 @@ async function dnPdf(p, dn, ctx) {
     doc.addImage(LOGO_EP, 'PNG', PW - 8 - 4.2, PH - 8.2, 4.2, 4.2); doc.text(lb, PW - 8 - 5.2 - tw, PH - 5);
   }
   return doc;
+}
+
+/* =====================================================================
+   QSL PROGRESS · IFR (internal floating roof): reads the panels from the
+   maker's drawing (vector PDF or DXF). Standard and half panels by their
+   size; the edge (special) panels between the last panel of each row and
+   the deck circle, split with their tags (3, 3A, 3B…). Powered by EP
+   ===================================================================== */
+'use strict';
+
+/* ---------- small geometry ---------- */
+const ifrMul = (m, n) => [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]];
+const ifrApply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+function ifrArea(P) { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; }
+/* convex polygon clipped by a convex polygon (Sutherland–Hodgman) */
+function ifrClip(subj, clip) {
+  let out = subj;
+  for (let i = 0; i < clip.length && out.length; i++) {
+    const a = clip[i], b = clip[(i + 1) % clip.length], inp = out; out = [];
+    const side = p => (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+    for (let j = 0; j < inp.length; j++) {
+      const p = inp[j], q = inp[(j + 1) % inp.length], sp = side(p), sq = side(q);
+      if (sp >= 0) out.push(p);
+      if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+    }
+  }
+  return out;
+}
+const ifrCircle = (cx, cy, r, n = 360) => Array.from({ length: n }, (_, i) => { const a = 2 * Math.PI * i / n; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+/* 10'-0 7/16"  ->  10.036 ft */
+function ifrFtIn(s) {
+  const m = String(s).match(/(\d+)\s*'\s*-?\s*(\d+)?(?:\s+(\d+)\s*\/\s*(\d+))?\s*"?/);
+  if (!m) return 0;
+  return +m[1] + ((+m[2] || 0) + (m[3] ? +m[3] / +m[4] : 0)) / 12;
+}
+
+/* ---------- 1. what the file has: rectangles, circles, texts (display coords: y down) ---------- */
+async function ifrPdfRaw(page, OPS) {
+  const vp = page.getViewport({ scale: 1 }), VT = vp.transform;
+  const ol = await page.getOperatorList();
+  const rects = [], circles = [], texts = [];
+  let ctm = [1, 0, 0, 1, 0, 0]; const stack = [];
+  const T = (x, y) => { const q = ifrApply(ctm, x, y); return ifrApply(VT, q[0], q[1]); };
+  const sub = (pts, curved) => {
+    if (pts.length < 3) return;
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), w = x1 - x0, h = y1 - y0;
+    if (curved) { if (w > 0 && Math.abs(w - h) / Math.max(w, h) < 0.01) circles.push({ cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, r: (w + h) / 4 }); return; }
+    let P = pts.slice(); if (P.length > 4 && Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 1e-3) P.pop();
+    if (P.length !== 4 || w < 1e-6 || h < 1e-6) return;
+    if (P.every(p => (Math.abs(p[0] - x0) < w * 0.02 || Math.abs(p[0] - x1) < w * 0.02) && (Math.abs(p[1] - y0) < h * 0.02 || Math.abs(p[1] - y1) < h * 0.02))) rects.push([x0, y0, x1, y1]);
+  };
+  for (let i = 0; i < ol.fnArray.length; i++) {
+    const f = ol.fnArray[i], a = ol.argsArray[i];
+    if (f === OPS.save) stack.push(ctm);
+    else if (f === OPS.restore) ctm = stack.pop() || ctm;
+    else if (f === OPS.transform) ctm = ifrMul(a, ctm);
+    else if (f === OPS.constructPath) {
+      const ops = a[0], c = a[1]; let k = 0, cur = [], curved = false;
+      for (const o of ops) {
+        if (o === OPS.moveTo) { sub(cur, curved); cur = [T(c[k], c[k + 1])]; curved = false; k += 2; }
+        else if (o === OPS.lineTo) { cur.push(T(c[k], c[k + 1])); k += 2; }
+        else if (o === OPS.curveTo) { cur.push(T(c[k + 4], c[k + 5])); curved = true; k += 6; }
+        else if (o === OPS.curveTo2 || o === OPS.curveTo3) { cur.push(T(c[k + 2], c[k + 3])); curved = true; k += 4; }
+        else if (o === OPS.closePath) { }
+        else if (o === OPS.rectangle) { sub(cur, curved); cur = []; curved = false; const x = c[k], y = c[k + 1], w = c[k + 2], h = c[k + 3];
+          sub([T(x, y), T(x + w, y), T(x + w, y + h), T(x, y + h)], false); k += 4; }
+      }
+      sub(cur, curved);
+    }
+  }
+  const tc = await page.getTextContent();
+  tc.items.forEach(t => { if (!t.str || !t.str.trim()) return; const m = t.transform, L = Math.hypot(m[0], m[1]) || 1, w = t.width || 0;
+    const q = ifrApply(VT, m[4] + m[0] / L * w / 2, m[5] + m[1] / L * w / 2); texts.push({ s: t.str.trim(), x: q[0], y: q[1], h: Math.hypot(m[2], m[3]) }); });
+  return { rects, circles, texts };
+}
+/* DXF: closed polylines of 4 corners, circles, texts; blocks (INSERT) are opened */
+function ifrDxfRaw(text) {
+  const L = String(text).split(/\r?\n/);
+  if (!L.slice(0, 80).some(x => x.trim() === 'SECTION')) throw new Error('This is not a DXF file. In AutoCAD: Save As → AutoCAD DXF.');
+  const blocks = {}, top = []; let sec = '', wantName = false, cur = null, blk = null, poly = null;
+  const fin = () => { if (!cur) return; const e = cur; cur = null;
+    if (e.t === 'POLYLINE') { poly = e; e.pts = []; return; }
+    if (e.t === 'VERTEX') { if (poly) poly.pts.push([e.x, e.y]); return; }
+    if (e.t === 'SEQEND') { if (poly) { poly.t = 'LWPOLYLINE'; (blk ? blk.ents : top).push(poly); } poly = null; return; }
+    if (e.t === 'BLOCK') { blk = { name: e.name, bx: e.x || 0, by: e.y || 0, ents: [] }; return; }
+    if (e.t === 'ENDBLK') { if (blk) blocks[blk.name] = blk; blk = null; return; }
+    if (e.ps) return;
+    (sec === 'BLOCKS' ? (blk ? blk.ents : []) : top).push(e); };
+  for (let i = 0; i + 1 < L.length; i += 2) {
+    const code = parseInt(L[i], 10), val = L[i + 1].trim();
+    if (isNaN(code)) throw new Error('This DXF could not be read. Save it again as an ASCII DXF (not binary).');
+    if (code === 0) { fin(); if (val === 'SECTION') { wantName = true; continue; } if (val === 'ENDSEC') { sec = ''; continue; }
+      if (sec === 'ENTITIES' || sec === 'BLOCKS') cur = { t: val, pts: [], flags: 0, sx: 1, sy: 1, rot: 0 }; continue; }
+    if (wantName && code === 2) { sec = val; wantName = false; continue; }
+    if (!cur) continue;
+    const n = parseFloat(val);
+    switch (code) {
+      case 1: cur.s = (cur.s || '') + val; break;
+      case 3: cur.s = (cur.s || '') + val; break;
+      case 2: cur.name = val; break;
+      case 67: if (val === '1') cur.ps = true; break;
+      case 70: cur.flags = parseInt(val, 10) || 0; break;
+      case 10: if (cur.t === 'LWPOLYLINE') cur.pts.push([n, 0]); else cur.x = n; break;
+      case 20: if (cur.t === 'LWPOLYLINE') { if (cur.pts.length) cur.pts[cur.pts.length - 1][1] = n; } else cur.y = n; break;
+      case 11: cur.x1 = n; break;
+      case 21: cur.y1 = n; break;
+      case 40: cur.r = n; break;
+      case 41: cur.sx = n; break;
+      case 42: cur.sy = n; break;
+      case 50: cur.rot = n; break;
+    }
+  }
+  fin();
+  const rects = [], circles = [], texts = [];
+  const walk = (ents, M, depth) => ents.forEach(e => {
+    if (e.t === 'INSERT') { const b = blocks[e.name]; if (!b || depth > 6) return; const r = (e.rot || 0) * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+      const m = ifrMul([1, 0, 0, 1, -b.bx, -b.by], ifrMul([e.sx || 1, 0, 0, e.sy || 1, 0, 0], [c, s, -s, c, e.x || 0, e.y || 0])); walk(b.ents, ifrMul(m, M), depth + 1); return; }
+    const T = (x, y) => { const q = ifrApply(M, x, y); return [q[0], -q[1]]; };     /* y down, as the PDF */
+    if (e.t === 'LWPOLYLINE') { let P = e.pts.map(q => T(q[0], q[1])); if (P.length === 5 && Math.hypot(P[0][0] - P[4][0], P[0][1] - P[4][1]) < 1e-6) P.pop(); if (P.length !== 4) return;
+      const xs = P.map(q => q[0]), ys = P.map(q => q[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), w = x1 - x0, h = y1 - y0;
+      if (w > 0 && h > 0 && P.every(q => (Math.abs(q[0] - x0) < w * 0.02 || Math.abs(q[0] - x1) < w * 0.02) && (Math.abs(q[1] - y0) < h * 0.02 || Math.abs(q[1] - y1) < h * 0.02))) rects.push([x0, y0, x1, y1]); }
+    else if (e.t === 'CIRCLE') { const c = T(e.x, e.y), k = Math.hypot(M[0], M[1]); circles.push({ cx: c[0], cy: c[1], r: e.r * k }); }
+    else if ((e.t === 'TEXT' || e.t === 'MTEXT') && e.s) { const c = T(e.x, e.y); texts.push({ s: e.s.replace(/\\[A-Za-z][^;]*;|[{}]/g, '').replace(/\\P/g, ' ').trim(), x: c[0], y: c[1], h: e.r || 1 }); }
+  });
+  walk(top, [1, 0, 0, 1, 0, 0], 0);
+  return { rects, circles, texts };
+}
+
+/* ---------- 2. the Equipment List and the title block (best effort; the admin checks it) ---------- */
+function ifrReadList(texts) {
+  const out = { std: 0, spec: 0, half: 0, tankD: 0, stdFt: 0, seals: [] };
+  const T = texts.map(t => Object.assign({}, t, { u: t.s.toUpperCase() }));
+  const num = t => /^\d{1,5}$/.test(t.s);
+  const all = T.map(t => t.u).join(' ');
+  const d = all.match(/TANK SIZE:?\s*([0-9'"\-\s\/]+?)\s*Ø/); if (d) out.tankD = ifrFtIn(d[1]);
+  const sm = all.match(/STANDARD MODULES?\s+([0-9'"\-\s\/]+?)\s*X\s*([0-9'"\-\s\/]+)/); if (sm) out.stdFt = Math.max(ifrFtIn(sm[1]), ifrFtIn(sm[2]));
+  /* the quantity of a row: the number in the QUANTITY column nearest to the row of the unit (TOTAL / EA / FT) */
+  const rowOf = (a, b) => { const dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y); return Math.min(dx, dy); };
+  const units = T.filter(t => t.u === 'TOTAL' || t.u === 'FT');
+  const qOf = u => { let best = null, bd = Infinity; T.forEach(t => { if (!num(t)) return; const r = rowOf(t, u), dd = Math.hypot(t.x - u.x, t.y - u.y); if (r < u.h * 0.8 && dd < u.h * 14 && dd < bd) { bd = dd; best = t; } }); return best ? +best.s : 0; };
+  const near = (u, re) => { let best = null, bd = Infinity; T.forEach(t => { if (!re.test(t.u)) return; const dd = Math.hypot(t.x - u.x, t.y - u.y); if (dd < bd) { bd = dd; best = t; } }); return { t: best, d: bd }; };
+  const tot = units.filter(u => u.u === 'TOTAL').map(u => ({ u, q: qOf(u) })).filter(x => x.q);
+  [['spec', /SPECIAL MODULES?/], ['std', /STANDARD MODULES?/], ['half', /HALF MODULES?/]].forEach(([k, re]) => {
+    let best = null, bd = Infinity; tot.forEach(x => { if (x.used) return; const n = near(x.u, re); if (n.t && n.d < bd) { bd = n.d; best = x; } });
+    if (best && bd < best.u.h * 40) { out[k] = best.q; best.used = true; } });
+  const ft = units.filter(u => u.u === 'FT').map(u => ({ u, q: qOf(u) })).filter(x => x.q);
+  T.filter(t => /SEAL/.test(t.u) && /(SHOE|WIPER|PRIMARY|SECONDARY|TERTIARY|RIM)/.test(t.u)).forEach(t => {
+    let best = null, bd = Infinity; ft.forEach(x => { const dd = Math.hypot(x.u.x - t.x, x.u.y - t.y); if (dd < bd) { bd = dd; best = x; } });
+    if (best && bd < t.h * 40) out.seals.push({ name: t.s.replace(/\s+WITH\b.*$/i, '').trim(), ft: best.q }); });
+  out.seals.sort((a, b) => (/PRIMARY/i.test(a.name) ? 0 : /SECONDARY/i.test(a.name) ? 1 : 2) - (/PRIMARY/i.test(b.name) ? 0 : /SECONDARY/i.test(b.name) ? 1 : 2));
+  return out;
+}
+
+/* ---------- 3. the panels ---------- */
+function ifrBuild(raw, opt = {}) {
+  /* the same rectangle drawn twice (outer + inner line): keep the outer one */
+  const R0 = raw.rects.map(r => ({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], w: r[2] - r[0], h: r[3] - r[1] })).sort((a, b) => b.w * b.h - a.w * a.h);
+  const kept = [];
+  const grid = new Map(), cell = 20;
+  R0.forEach(r => { const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2, gx = Math.floor(cx / cell), gy = Math.floor(cy / cell);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const k of (grid.get((gx + a) + ',' + (gy + b)) || [])) if (cx > k.x0 && cx < k.x1 && cy > k.y0 && cy < k.y1 && r.w > k.w * 0.85 && r.h > k.h * 0.85) return;
+    kept.push(r); const kk = gx + ',' + gy; if (!grid.has(kk)) grid.set(kk, []); grid.get(kk).push(r); });
+  /* the most common size is the standard panel */
+  const key = r => Math.round(Math.max(r.w, r.h)) + 'x' + Math.round(Math.min(r.w, r.h));
+  const hist = {}; kept.forEach(r => { const k = key(r); hist[k] = (hist[k] || 0) + 1; });
+  const top = Object.entries(hist).sort((a, b) => b[1] - a[1])[0];
+  if (!top || top[1] < 20) throw new Error('No panels were found in this drawing (rectangles of the same size). Use the maker\'s vector PDF or the DXF.');
+  const [SL, SS] = top[0].split('x').map(Number);
+  const near = (a, b) => Math.abs(a - b) <= Math.max(1.5, b * 0.03);
+  const std = kept.filter(r => near(Math.max(r.w, r.h), SL) && near(Math.min(r.w, r.h), SS));
+  const horiz = std.filter(r => r.w > r.h).length >= std.length / 2;
+  /* work with the long side along x (rows are horizontal) */
+  const F = horiz ? (x, y) => [x, y] : (x, y) => [y, x];
+  const toR = r => { const a = F(r.x0, r.y0), b = F(r.x1, r.y1); return { x0: Math.min(a[0], b[0]), x1: Math.max(a[0], b[0]), y0: Math.min(a[1], b[1]), y1: Math.max(a[1], b[1]) }; };
+  const S = std.map(toR).filter(r => r.x1 - r.x0 > r.y1 - r.y0 - 0.01);
+  const SLm = S.reduce((a, r) => a + r.x1 - r.x0, 0) / S.length;
+  /* a half panel sits in a row, touching a standard panel at one end */
+  const touch = r => S.some(o => Math.abs((o.y0 + o.y1) / 2 - (r.y0 + r.y1) / 2) < SS * 0.2 && (Math.abs(o.x1 - r.x0) < SS * 0.1 || Math.abs(o.x0 - r.x1) < SS * 0.1));
+  const H = kept.filter(r => !std.includes(r)).map(toR).filter(r => near(r.y1 - r.y0, SS) && (r.x1 - r.x0) > SL * 0.25 && (r.x1 - r.x0) < SL * 0.75 && touch(r));
+  const pan = S.map(r => ({ r, sub: 'STD' })).concat(H.map(r => ({ r, sub: 'HALF' })));
+  /* the deck: the smallest drawn circle that holds every panel */
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; pan.forEach(({ r }) => { x0 = Math.min(x0, r.x0); x1 = Math.max(x1, r.x1); y0 = Math.min(y0, r.y0); y1 = Math.max(y1, r.y1); });
+  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, span = Math.max(x1 - x0, y1 - y0);
+  const far = (cx, cy) => Math.max(...pan.map(({ r }) => Math.max(Math.hypot(r.x0 - cx, r.y0 - cy), Math.hypot(r.x1 - cx, r.y0 - cy), Math.hypot(r.x0 - cx, r.y1 - cy), Math.hypot(r.x1 - cx, r.y1 - cy))));
+  const C = raw.circles.map(c => { const q = F(c.cx, c.cy); return { cx: q[0], cy: q[1], r: c.r }; })
+    .filter(c => Math.hypot(c.cx - mx, c.cy - my) < span * 0.03 && c.r > span * 0.4 && c.r < span * 0.75)
+    .filter(c => c.r >= far(c.cx, c.cy) * 0.999).sort((a, b) => a.r - b.r);
+  const deck = C[0] || { cx: mx, cy: my, r: far(mx, my) + SS * 0.15, guess: true };
+  const { cx, cy } = deck, R = deck.r;
+  /* a short rectangle at the end of a row, almost on the rim, is the square part of an edge panel: it goes with the edge */
+  for (let i = pan.length - 1; i >= 0; i--) { const { r, sub } = pan[i]; if (sub !== 'HALF') continue;
+    const far1 = Math.max(Math.hypot(r.x0 - cx, (r.y0 + r.y1) / 2 - cy), Math.hypot(r.x1 - cx, (r.y0 + r.y1) / 2 - cy));
+    if (R - far1 < SS * 0.45) pan.splice(i, 1); }
+  /* rows: the pitch between rows (panel + gap) */
+  const ys = Array.from(new Set(S.map(r => Math.round(r.y0 * 10) / 10))).sort((a, b) => a - b);
+  const dif = []; for (let i = 1; i < ys.length; i++) { const d = ys[i] - ys[i - 1]; if (d > SS * 0.6 && d < SS * 1.4) dif.push(d); }
+  dif.sort((a, b) => a - b); const pitch = dif.length ? dif[Math.floor(dif.length / 2)] : SS;
+  let b0 = ys[0]; while (b0 > cy - R) b0 -= pitch;
+  const bands = []; for (let y = b0; y < cy + R; y += pitch) bands.push(y);
+  const ring = ifrCircle(cx, cy, R, 720);
+  /* the tags of the edge panels (3, 3A, 3B…) around the rim */
+  const tags = raw.texts.map(t => { const q = F(t.x, t.y); return { s: t.s, x: q[0], y: q[1] }; })
+    .filter(t => /^\d{1,3}[A-Z]?$/.test(t.s) && Math.hypot(t.x - cx, t.y - cy) > R * 0.985 && Math.hypot(t.x - cx, t.y - cy) < R * 1.13)
+    .map(t => Object.assign(t, { a: Math.atan2(t.y - cy, t.x - cx) }));
+  /* the gaps between the last panel of a row and the circle */
+  const gaps = [];
+  bands.forEach(by => {
+    const ym = by + pitch / 2, inb = pan.filter(({ r }) => Math.abs((r.y0 + r.y1) / 2 - ym) < pitch * 0.45);
+    const dy = Math.max(0, Math.min(Math.abs(by - cy), Math.abs(by + pitch - cy)) * ((by < cy && by + pitch > cy) ? 0 : 1));
+    if (dy >= R) return;
+    const hw = Math.sqrt(R * R - dy * dy), L = cx - hw, Rr = cx + hw;
+    if (inb.length) { const a = Math.min(...inb.map(p => p.r.x0)), b = Math.max(...inb.map(p => p.r.x1)); gaps.push({ by, a: L, b: a, side: -1 }); gaps.push({ by, a: b, b: Rr, side: 1 }); }
+    else gaps.push({ by, a: L, b: Rr, side: 0 });
+  });
+  const ang = (x, y) => Math.atan2(y - cy, x - cx);
+  const adiff = (a, b) => { let d = Math.abs(a - b) % (2 * Math.PI); return Math.min(d, 2 * Math.PI - d); };
+  const geoms = gaps.map(g => { const poly = ifrClip([[g.a, g.by], [g.b, g.by], [g.b, g.by + pitch], [g.a, g.by + pitch]], ring);
+    return Object.assign(g, { poly, area: poly.length ? Math.abs(ifrArea(poly)) : 0 }); }).filter(g => g.area > SL * SS * 0.004);
+  geoms.forEach(g => { const xs = g.poly.map(p => p[0]); g.c = [(Math.min(...xs) + Math.max(...xs)) / 2, g.by + pitch / 2]; g.n = 0; g.tags = []; });
+  /* each tag to the gap whose rim is closest */
+  tags.forEach(t => { let best = null, bd = Infinity; geoms.forEach(g => { const rim = g.poly.filter(p => Math.hypot(p[0] - cx, p[1] - cy) > R * 0.995); const pts = rim.length ? rim : g.poly;
+      pts.forEach(p => { const d = Math.hypot(p[0] - t.x, p[1] - t.y); if (d < bd) { bd = d; best = g; } }); });
+    if (best && bd < SL * 1.5) best.tags.push(t); });
+  const specials = [];
+  geoms.forEach(g => {
+    const n = tags.length ? Math.max(1, g.tags.length) : Math.max(1, Math.ceil((g.b - g.a) / (SL * 1.02)));
+    if (tags.length && !g.tags.length && g.area < SL * SS * 0.05) return;      /* a sliver without a tag: part of the rim */
+    /* cut along the row: at the joints of the next row when they fit, else in equal parts */
+    const xs = g.poly.map(p => p[0]), a = Math.min(...xs), b = Math.max(...xs);
+    const cuts = []; for (let i = 1; i < n; i++) cuts.push(g.side === -1 ? b - (b - a) * i / n : a + (b - a) * i / n);
+    cuts.sort((u, v) => u - v);
+    const edges = [a].concat(cuts, [b]);
+    const tg = g.tags.slice().sort((u, v) => u.x - v.x);
+    for (let i = 0; i + 1 < edges.length; i++) {
+      const pc = ifrClip([[edges[i], g.by], [edges[i + 1], g.by], [edges[i + 1], g.by + pitch], [edges[i], g.by + pitch]], ring);
+      if (pc.length < 3) continue;
+      specials.push({ poly: pc, tag: tg[i] ? tg[i].s : '' });
+    }
+  });
+  /* all the pieces, in ft, y up, centered; rows from the top, left to right */
+  const units = opt.stdFt ? SLm / opt.stdFt : (opt.deckFt ? 2 * R / opt.deckFt : SLm / 10);
+  const B = (x, y) => { const q = horiz ? [x, y] : [y, x]; const c = horiz ? [cx, cy] : [cy, cx]; return [Math.round((q[0] - c[0]) / units * 1000) / 1000, Math.round(-(q[1] - c[1]) / units * 1000) / 1000]; };
+  const rectP = r => [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]];
+  let all = pan.map(({ r, sub }) => ({ sub, poly: rectP(r) })).concat(specials.map(s => ({ sub: 'SPEC', poly: s.poly, tag: s.tag })));
+  all.forEach(o => { o.cy = o.poly.reduce((a, p) => a + p[1], 0) / o.poly.length; o.cx = o.poly.reduce((a, p) => a + p[0], 0) / o.poly.length; o.row = Math.floor((o.cy - b0) / pitch); });
+  all.sort((u, v) => u.row - v.row || u.cx - v.cx);
+  const Rft = R / units, onRim = p => Math.hypot(p[0], p[1]) > Rft * 0.997;
+  const pad = n => String(n).padStart(4, '0');
+  const items = all.map((o, i) => {
+    let pts = o.poly.map(p => B(p[0], p[1]));
+    if (o.sub === 'SPEC' && pts.length > 24) pts = pts.filter((p, k) => !onRim(p) || k % 3 === 0 || !onRim(pts[(k + 1) % pts.length]) || !onRim(pts[(k + pts.length - 1) % pts.length]));
+    if (ifrArea(pts) < 0) pts.reverse();
+    let per = 0, rim = 0; for (let k = 0; k < pts.length; k++) { const p = pts[k], q = pts[(k + 1) % pts.length], l = Math.hypot(q[0] - p[0], q[1] - p[1]); per += l; if (onRim(p) && onRim(q)) rim += l; }
+    return { id: 'P' + pad(i + 1), kind: 'PANEL', sub: o.sub, tag: o.tag || '', pts, sil: Math.round((per - rim) / 2 * 100) / 100 };
+  });
+  return { items, R: Rft, units, stdFt: SLm / units, pitchFt: pitch / units, tags: tags.length, guessCircle: !!deck.guess, horiz,
+    n: { std: items.filter(i => i.sub === 'STD').length, half: items.filter(i => i.sub === 'HALF').length, spec: items.filter(i => i.sub === 'SPEC').length } };
+}
+
+/* ---------- 4. shared by the Admin and the phone: the roof drawing (SVG) ---------- */
+const IFR_INS = '#A8D8BA', IFR_INS_S = '#3F7F58', IFR_PEND_S = '#B9B6CB', IFR_SIL = '#E0479E', IFR_SEL = '#FF6A00';
+const IFR_SEAL_COL = ['#7B1FA2', '#1E88E5', '#00897B'];
+const ifrSealR = (R, k) => R * (1 + 0.02 * k);
+/* the seal segments: one per degree, 0° on top, clockwise */
+function ifrSealPts(R, k, a) { const r = ifrSealR(R, k), t0 = a * Math.PI / 180, t1 = (a + 1) * Math.PI / 180, f = v => Math.round(v * 1000) / 1000;
+  return [[f(r * Math.sin(t0)), f(r * Math.cos(t0))], [f(r * Math.sin(t1)), f(r * Math.cos(t1))]]; }
+const ifrIsSeal = it => /^SEAL\d$/.test(it.kind);
+const ifrSealK = it => +it.kind.slice(4);
+/* o: { st(it) -> { pnl, sil, sl, today }, sel: Set, vb, interactive, on(k) -> seal on, col(k) } */
+function ifrSvgBody(p, o) {
+  const R = p.geo.R, vb = o.vb, sw = Math.max(vb[2], vb[3]) / 650, sel = o.sel || new Set();
+  const out = [`<circle cx="0" cy="0" r="${R}" fill="#FFFFFF" stroke="#1C0B5B" stroke-width="${sw * 1.6}"/>`];
+  const pc = it => o.interactive ? ` data-pc="${it.id}"` : '';
+  const P = p.items.filter(i => i.kind === 'PANEL');
+  P.forEach(it => { const s = o.st(it), on = sel.has(it.id);
+    out.push(`<polygon${pc(it)} points="${it.pts.map(q => q[0] + ',' + (-q[1])).join(' ')}" fill="${on ? IFR_SEL : s.pnl ? (s.today ? '#5DBB84' : IFR_INS) : '#FFFFFF'}" stroke="${s.pnl ? IFR_INS_S : IFR_PEND_S}" stroke-width="${sw * 0.7}"/>`); });
+  P.forEach(it => { if (!o.st(it).sil) return;
+    out.push(`<polygon points="${it.pts.map(q => q[0] + ',' + (-q[1])).join(' ')}" fill="none" stroke="${IFR_SIL}" stroke-width="${sw * 1.9}" stroke-linejoin="round" pointer-events="none"/>`); });
+  [1, 2, 3].forEach(k => {
+    if (!o.on(k)) return;
+    const S = p.items.filter(i => i.kind === 'SEAL' + k), rr = ifrSealR(R, k);
+    out.push(`<circle cx="0" cy="0" r="${rr}" fill="none" stroke="#C9C6DB" stroke-width="${sw * 2.4}" stroke-dasharray="${sw * 6} ${sw * 4}" pointer-events="none"/>`);
+    S.forEach(it => { const s = o.st(it), on = sel.has(it.id), a = it.pts[0], b = it.pts[1];
+      if (on || s.sl) out.push(`<line x1="${a[0]}" y1="${-a[1]}" x2="${b[0]}" y2="${-b[1]}" stroke="${on ? IFR_SEL : o.col(k)}" stroke-width="${sw * (on ? 5.2 : 4.2)}" stroke-linecap="round" pointer-events="none"/>`);
+      if (o.interactive) out.push(`<line${pc(it)} x1="${a[0]}" y1="${-a[1]}" x2="${b[0]}" y2="${-b[1]}" stroke="rgba(0,0,0,0)" stroke-width="${sw * 12}"/>`); });
+  });
+  const ro = ifrSealR(R, 3) + R * 0.05, fs = Math.max(vb[2], vb[3]) / 38;
+  [[0, '0°'], [90, '90°'], [180, '180°'], [270, '270°']].forEach(([a, t]) => { const r = a * Math.PI / 180;
+    out.push(`<text x="${ro * Math.sin(r)}" y="${-ro * Math.cos(r) + fs * 0.35}" font-size="${fs}" font-family="Arial" font-weight="700" fill="#1C0B5B" text-anchor="middle" pointer-events="none">${t}</text>`); });
+  if (vb[2] < R * 0.8) {
+    const f2 = vb[2] / 40;
+    P.forEach(it => { const c = it.pts.reduce((m, q) => [m[0] + q[0] / it.pts.length, m[1] + q[1] / it.pts.length], [0, 0]), y = -c[1];
+      if (c[0] < vb[0] || c[0] > vb[0] + vb[2] || y < vb[1] || y > vb[1] + vb[3]) return;
+      const t = it.tag || it.id.replace(/^P0*/, '');
+      out.push(`<text x="${c[0]}" y="${y + f2 * 0.35}" font-size="${f2}" font-family="Arial" font-weight="700" fill="#1C0B5B" fill-opacity="0.75" text-anchor="middle" pointer-events="none">${t}</text>`); });
+  }
+  return out.join('');
+}
+const ifrBoxR = p => { const r = ifrSealR(p.geo.R, 3) + p.geo.R * 0.1; return [-r, -r, 2 * r, 2 * r]; };
+/* point in polygon (map units, y up) */
+function ifrInPoly(x, y, P) { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if (((a[1] > y) !== (b[1] > y)) && (x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0])) c = !c; } return c; }
+/* degrees "from" "to" (clockwise, can pass 0°) -> the ids of that seal */
+function ifrSealRange(p, k, a0, a1) {
+  a0 = ((Math.round(a0) % 360) + 360) % 360; a1 = ((Math.round(a1) % 360) + 360) % 360;
+  const n = a1 > a0 ? a1 - a0 : a1 === a0 ? 360 : 360 - a0 + a1, ids = [];
+  for (let i = 0; i < n; i++) ids.push(`S${k}-${String((a0 + i) % 360).padStart(3, '0')}`);
+  return ids;
+}
+/* "PRIMARY SS304 SHOE SEAL" -> "Primary shoe" */
+function ifrShort(n) {
+  const s = String(n || '').toUpperCase();
+  const a = /PRIMARY/.test(s) ? 'Primary' : /SECONDARY/.test(s) ? 'Secondary' : /TERTIARY/.test(s) ? 'Tertiary' : '';
+  const b = /SHOE/.test(s) ? 'shoe' : /WIPER/.test(s) ? 'wiper' : /FOAM/.test(s) ? 'foam' : '';
+  return (a || b) ? `${a}${a && b ? ' ' : ''}${a ? b : b.charAt(0).toUpperCase() + b.slice(1)}`.trim() : String(n || '').trim().slice(0, 22);
+}
+
+/* =====================================================================
+   QSL PROGRESS · phone · IFR (internal floating roof)
+   On top the activity of today: Transfer · Panels · Silicone · Seal 1/2/3.
+   Panels and silicone: tap or drag a box on the roof. Seals: from what
+   degree to what degree. Transfer: only how many today. Powered by EP
+   ===================================================================== */
+'use strict';
+
+Object.assign(PG_STG, {
+  TRF: { r: 'Transferred', p: 'Transferred', color: '#8E5CD9', ink: '#FFFFFF' },
+  PNL: { r: 'Installed', p: 'Installed', color: '#2E9D5B', ink: '#FFFFFF' },
+  SIL: { r: 'Silicone', p: 'Silicone', color: '#E0479E', ink: '#FFFFFF' },
+  SL1: { r: 'Seal 1', p: 'Seal 1', color: IFR_SEAL_COL[0], ink: '#FFFFFF' },
+  SL2: { r: 'Seal 2', p: 'Seal 2', color: IFR_SEAL_COL[1], ink: '#FFFFFF' },
+  SL3: { r: 'Seal 3', p: 'Seal 3', color: IFR_SEAL_COL[2], ink: '#FFFFFF' }
+});
+Object.assign(PG_KS, { PANEL: ['PNL', 'SIL'], SEAL1: ['SL1'], SEAL2: ['SL2'], SEAL3: ['SL3'], TRF: ['TRF'] });
+const pgIfrCfg = p => p.ifr || { seals: [], w: {} };
+const pgIfrSealOn = (p, k) => !!((pgIfrCfg(p).seals[k - 1] || {}).on);
+const pgIfrSealFt = (p, k) => Number((pgIfrCfg(p).seals[k - 1] || {}).ft) || Math.round(Math.PI * ((p.geo && (p.geo.tankD || p.geo.D)) || 0));
+const pgIfrSealName = (p, k) => { const n = (pgIfrCfg(p).seals[k - 1] || {}).name; return `Seal ${k}${n ? ' · ' + ifrShort(n) : ''}`; };
+const pgIfrQty = (p, it, s) => it.kind === 'PANEL' ? (s === 'SIL' ? (it.sil || 0) : 1) : ifrIsSeal(it) ? pgIfrSealFt(p, ifrSealK(it)) / 360 : 1;
+const pgIfrUnit = (p, it, s) => it.kind === 'PANEL' ? (s === 'SIL' ? 'ft' : 'panels') : ifrIsSeal(it) ? 'ft' : 'panels';
+const PG_IFR = ['TRF', 'PNL', 'SIL', 'SL1', 'SL2', 'SL3'];
+const pgIfrActs = p => PG_IFR.filter(k => !/^SL/.test(k) || pgIfrSealOn(p, +k.slice(2)));
+const pgIfrItems = (p, k) => k === 'TRF' ? p.items.filter(i => i.kind === 'TRF') : (k === 'PNL' || k === 'SIL') ? p.items.filter(i => i.kind === 'PANEL') : p.items.filter(i => i.kind === 'SEAL' + k.slice(2));
+function pgIfrAct(p, k) {
+  let tot = 0, done = 0, n = 0; const I = pgIfrItems(p, k);
+  I.forEach(it => { const q = pgIfrQty(p, it, k); tot += q; if (pgM(p, it)[k]) { done += q; n++; } });
+  return { tot, done, n, all: I.length, pct: tot ? done / tot * 100 : 0 };
+}
+function pgIfrHeadline(p) {
+  const A = pgIfrActs(p), w = k => Number(pgIfrCfg(p).w[k]) || 0, ws = A.reduce((a, k) => a + w(k), 0);
+  const pc = ws ? A.reduce((a, k) => a + pgIfrAct(p, k).pct * w(k), 0) / ws : 0, pn = pgIfrAct(p, 'PNL');
+  return { pct: Math.round(pc * 10) / 10, txt: `${pn.n} / ${pn.all} panels`, col: PG_STG.PNL.color };
+}
+const pgIfrLabel = k => k === 'TRF' ? 'Transfer' : k === 'PNL' ? 'Panels' : k === 'SIL' ? 'Silicone' : 'Seal ' + k.slice(2);
+const pgIfrA = p => { const A = pgIfrActs(p); if (!A.includes(PG.ui.ia)) PG.ui.ia = 'PNL'; return PG.ui.ia; };
+/* the item that a touch or a box can take with the activity of today */
+function pgIfrTakes(p, it) { const a = pgIfrA(p); if (a === 'PNL' || a === 'SIL') return it.kind === 'PANEL'; if (/^SL/.test(a)) return it.kind === 'SEAL' + a.slice(2); return false; }
+
+/* ---------- drawing ---------- */
+function pgIfrSvg(p, vb) {
+  const st = it => { const m = pgM(p, it); return { pnl: !!m.PNL, sil: !!m.SIL, sl: ifrIsSeal(it) && !!m['SL' + ifrSealK(it)] }; };
+  return `<svg xmlns="http://www.w3.org/2000/svg" id="pgmap" viewBox="${vb.join(' ')}" preserveAspectRatio="xMidYMid meet">${ifrSvgBody(p, { st, sel: PG.ui.sel, vb, interactive: false, on: k => pgIfrSealOn(p, k), col: k => PG_STG['SL' + k].color })}</svg>`;
+}
+function pgIfrLegend(p) {
+  return `<span><i style="background:#fff;border:1.5px solid ${IFR_PEND_S}"></i>To install</span><span><i style="background:${IFR_INS}"></i>Installed</span><span><i style="background:#fff;border:2.5px solid ${IFR_SIL}"></i>Silicone</span>${[1, 2, 3].filter(k => pgIfrSealOn(p, k)).map(k => `<span><i style="background:${PG_STG['SL' + k].color}"></i>${esc(pgIfrSealName(p, k))}</span>`).join('')}<span><i style="background:${PG_SEL}"></i>Selected</span>`;
+}
+/* touch: the panel under the finger, or the closest degree of the seal */
+function pgIfrPick(p, x, y, tol) {
+  const a = pgIfrA(p);
+  if (a === 'PNL' || a === 'SIL') { const it = p.items.find(i => i.kind === 'PANEL' && ifrInPoly(x, y, i.pts)); return it ? it.id : ''; }
+  if (/^SL/.test(a)) { let best = '', bd = Infinity; p.items.forEach(i => { if (i.kind !== 'SEAL' + a.slice(2)) return; const c = [(i.pts[0][0] + i.pts[1][0]) / 2, (i.pts[0][1] + i.pts[1][1]) / 2], d = Math.hypot(c[0] - x, c[1] - y); if (d < bd) { bd = d; best = i.id; } }); return bd <= tol ? best : ''; }
+  return '';
+}
+function pgIfrBox(p, x0, y0, x1, y1) {
+  p.items.forEach(it => { if (!it.pts || !pgIfrTakes(p, it)) return;
+    const cx = it.pts.reduce((a, c) => a + c[0], 0) / it.pts.length, cy = -it.pts.reduce((a, c) => a + c[1], 0) / it.pts.length;
+    if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) PG.ui.sel.add(it.id); });
+}
+/* the activity of today, on top of the roof: one pill; a touch opens the list */
+function pgIfrChips(p) {
+  const a = pgIfrA(p);
+  return `<button class="pgifrp" data-a="pgifrmenu" style="background:${PG_STG[a].color}">${pgIfrLabel(a)} <span>▾</span></button>
+    ${PG.ui.iam ? `<div class="pgifrm">${pgIfrActs(p).map(k => `<button class="${a === k ? 'on' : ''}" data-ia="${k}"><i style="background:${PG_STG[k].color}"></i>${k === 'TRF' || k === 'PNL' || k === 'SIL' ? pgIfrLabel(k) : esc(pgIfrSealName(p, +k.slice(2)))}</button>`).join('')}</div>` : ''}`;
+}
+const pgF0 = q => Math.round(q).toLocaleString('en-US');
+/* the window from below: when something is selected */
+function pgIfrBar(p) {
+  const a = pgIfrA(p), items = pgSelItems(p).filter(it => pgIfrTakes(p, it)), A = pgIfrAct(p, a);
+  const prog = `${a === 'TRF' || a === 'PNL' ? `${A.n} / ${A.all} panels` : `${pgF0(A.done)} / ${pgF0(A.tot)} ft`} · ${A.pct.toFixed(1)}%`;
+  if (a === 'TRF') return '<div class="pgsheet" id="pgbar"></div>';
+  const n = items.filter(it => pgNext(p, it) === a).length;
+  const ft = a === 'SIL' ? items.filter(it => pgNext(p, it) === 'SIL').reduce((s, it) => s + (it.sil || 0), 0) : /^SL/.test(a) ? n * pgIfrSealFt(p, +a.slice(2)) / 360 : 0;
+  const sumT = !items.length ? '' : a === 'PNL' ? `${items.length} panel(s) selected` : a === 'SIL' ? `${items.length} panel(s) · ${pgF0(ft)} ft of silicone` : `${items.length}° selected · ${pgF0(ft)} ft`;
+  const why = a === 'SIL' && items.length && !n ? 'Silicone goes on installed panels only.' : '';
+  return `<div class="pgsheet ${items.length ? 'on' : ''}" id="pgbar"><div class="grab"></div>
+    <div class="pgsrow"><div class="pgsum"><b>${esc(sumT)}</b><span>${why ? esc(why) : esc(prog)}</span></div>
+      <div class="pgbtns"><button class="btn" data-pgmark="${a}" ${n ? '' : 'disabled'} style="${n ? `background:${PG_STG[a].color};border-color:${PG_STG[a].color};color:#fff` : ''}">${esc(pgLabel(p, a))} ✓${n ? ` (${n}${/^SL/.test(a) ? '°' : ''})` : ''}</button></div>
+      <div class="pgbtns2"><button class="btn ghost" data-a="pgbacksel" ${items.some(it => pgDone(p, it) >= 0) ? '' : 'disabled'}>Back to…</button><button class="btn ghost" data-a="pgclear">Clear</button></div></div></div>`;
+}
+/* under the pill: the second step of the seals (degrees) and of the transfer (how many) */
+function pgIfrSub(p) {
+  const a = pgIfrA(p), A = pgIfrAct(p, a);
+  if (a === 'TRF') return `<button class="pgifrs" data-a="pgifrtrfm">＋ Panels moved in today <small>${A.n} / ${A.all}</small></button>`;
+  if (/^SL/.test(a)) return `<button class="pgifrs" data-a="pgifrrngm">° From – to <small>${pgF0(A.done)} / ${pgF0(A.tot)} ft</small></button>`;
+  return '';
+}
+function pgIfrRangeModal(p) {
+  const a = pgIfrA(p); if (!/^SL/.test(a)) return;
+  const m = UI.modal(`<h3>${esc(pgIfrSealName(p, +a.slice(2)))}</h3><p class="msub">0° on top, clockwise. It can pass 0° (e.g. 350° to 20°).</p>
+    <div class="pgifrr"><span>From</span><input class="inp" id="pgA0" inputmode="numeric" placeholder="0" value="${esc(PG.ui.a0 ?? '')}"><span>to</span><input class="inp" id="pgA1" inputmode="numeric" placeholder="90" value="${esc(PG.ui.a1 ?? '')}"><span>°</span></div>
+    <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="ok">Select</button></div>`);
+  m.querySelector('[data-x=no]').onclick = () => UI.close();
+  m.querySelector('[data-x=ok]').onclick = () => {
+    const v0 = m.querySelector('#pgA0').value.replace('°', '').trim(), v1 = m.querySelector('#pgA1').value.replace('°', '').trim(), a0 = Number(v0), a1 = Number(v1);
+    if (v0 === '' || v1 === '' || !isFinite(a0) || !isFinite(a1) || a0 < 0 || a1 < 0 || a0 > 360 || a1 > 360) { UI.toast('Write from and to: 0 to 360 degrees.', 'err'); return; }
+    PG.ui.a0 = v0; PG.ui.a1 = v1; UI.close();
+    ifrSealRange(p, +a.slice(2), a0, a1).forEach(id => PG.ui.sel.add(id)); pgRefresh();
+  };
+  setTimeout(() => { const i = m.querySelector('#pgA0'); if (i) i.focus(); }, 50);
+}
+function pgIfrTrfModal(p) {
+  const A = pgIfrAct(p, 'TRF');
+  const m = UI.modal(`<h3>Transfer into the tank</h3><p class="msub">${fmtDate(PG.ui.date || todayStr())} · ${A.n} / ${A.all} panels in · ${A.all - A.n} left</p>
+    <div class="pgstps">${pgStepper('pgTrN', 'Panels moved in', 'today', 0, Math.max(0, A.all - A.n))}</div>
+    <div class="mbtns"><button class="btn ghost" data-x="no">Cancel</button><button class="btn primary" data-x="ok">Save</button></div>`);
+  pgWireSteppers(m);
+  m.querySelector('[data-x=no]').onclick = () => UI.close();
+  m.querySelector('[data-x=ok]').onclick = () => pgIfrTrf(p, Number(m.querySelector('#pgTrN').value));
+}
+async function pgIfrTrf(p, n) {
+  if (!(n > 0) || n !== Math.round(n)) { UI.toast('Write how many panels (whole number).', 'err'); return; }
+  if ((PG.ui.date || todayStr()) > todayStr()) { UI.toast('The date cannot be in the future.', 'err'); return; }
+  if (!S.sup) { if (typeof askName === 'function') { if (!await askName(false)) return; } else { UI.toast('Choose the supervisor first (Settings).', 'err'); return; } }
+  const free = p.items.filter(i => i.kind === 'TRF' && !pgM(p, i).TRF);
+  if (n > free.length) { UI.toast(`Only ${free.length} panel(s) are left to transfer.`, 'err'); return; }
+  const r = pgMark(p, free.slice(0, n).map(i => i.id), 'TRF');
+  UI.close(); await pgSave(); render(); UI.toast(`Transfer: +${r.done} panel(s).`, 'ok');
 }
 
 /* =====================================================================
